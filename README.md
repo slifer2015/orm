@@ -6,7 +6,6 @@
 [![MIT license](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
 
 
-
 ORM that delivers support for full stack data access:
 
  * MySQL - for relational data
