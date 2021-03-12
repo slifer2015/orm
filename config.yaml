@@ -1,0 +1,26 @@
+default:
+  mysqlEncoding: utf8
+  mysql: root:root@tcp(localhost:3308)/test
+  redis: localhost:6381:0
+  streams:
+    stream-1:
+      - test-group-1
+      - test-group-2
+    stream-2:
+      - test-group-1
+  elastic: http://localhost:9209
+  elastic_trace: http://localhost:9209
+  clickhouse: http://localhost:9002?debug=false
+  local_cache: 1000
+  locker: default
+another:
+  sentinel:
+    master:1:
+      - :26379
+      - 192.156.23.11:26379
+      - 192.156.23.12:26379
+  streams:
+      stream-3:
+        - test-group-1
+default_queue:
+  redis: localhost:6381:1
