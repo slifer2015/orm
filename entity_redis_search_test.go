@@ -33,11 +33,18 @@ type redisSearchEntity struct {
 	Ref             *redisSearchEntity `orm:"searchable"`
 }
 
+type redisSearchEntity2 struct {
+	ORM `orm:"redisSearch=search"`
+	ID  uint
+	Age uint64 `orm:"searchable"`
+}
+
 func TestEntityRedisSearch(t *testing.T) {
 	var entity *redisSearchEntity
+	var entity2 *redisSearchEntity2
 	registry := &Registry{}
 	registry.RegisterEnumStruct("orm.TestEnum", TestEnum)
-	engine := PrepareTables(t, registry, 5, entity)
+	engine := PrepareTables(t, registry, 5, entity, entity2)
 
 	indexer := NewRedisSearchIndexer(engine)
 	indexer.DisableLoop()
@@ -101,7 +108,7 @@ func TestEntityRedisSearch(t *testing.T) {
 	flusher.Flush()
 
 	indices := engine.GetRedisSearch("search").ListIndices()
-	assert.Len(t, indices, 1)
+	assert.Len(t, indices, 2)
 	assert.True(t, strings.HasPrefix(indices[0], "orm.redisSearchEntity:"))
 	info := engine.GetRedisSearch("search").Info(indices[0])
 	assert.False(t, info.Indexing)
