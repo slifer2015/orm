@@ -567,8 +567,15 @@ func TestEntityRedisSearch(t *testing.T) {
 	assert.Len(t, ids, 10)
 
 	entities := make([]*redisSearchEntity, 0)
-	engine.RedisSearch(&entities, query, NewPager(1, 10))
+	total = engine.RedisSearch(&entities, query, NewPager(1, 10))
+	assert.Equal(t, uint64(49), total)
 	assert.Len(t, entities, 10)
 	assert.Equal(t, "dog 2", entities[0].Name)
 	assert.Equal(t, "dog 11", entities[9].Name)
+
+	query.FilterInt("Age", 10)
+	assert.True(t, engine.RedisSearchOne(entity, query))
+	assert.Equal(t, "dog 10", entity.Name)
+	query.FilterInt("Balance", 700)
+	assert.False(t, engine.RedisSearchOne(entity, query))
 }

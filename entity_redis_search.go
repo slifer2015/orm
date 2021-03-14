@@ -13,7 +13,7 @@ func (e *Engine) RedisSearchIds(entity Entity, query *RedisSearchQuery, pager *P
 	return redisSearch(e, schema, query, pager, nil)
 }
 
-func (e *Engine) RedisSearch(entities interface{}, query *RedisSearchQuery, pager *Pager, references ...string) {
+func (e *Engine) RedisSearch(entities interface{}, query *RedisSearchQuery, pager *Pager, references ...string) (totalRows uint64) {
 	elem := reflect.ValueOf(entities).Elem()
 	_, has, name := getEntityTypeForSlice(e.registry, elem.Type())
 	if !has {
@@ -24,6 +24,17 @@ func (e *Engine) RedisSearch(entities interface{}, query *RedisSearchQuery, page
 	if total > 0 {
 		e.LoadByIDs(ids, entities, references...)
 	}
+	return total
+}
+
+func (e *Engine) RedisSearchOne(entity Entity, query *RedisSearchQuery, references ...string) (found bool) {
+	schema := e.GetRegistry().GetTableSchemaForEntity(entity).(*tableSchema)
+	ids, total := redisSearch(e, schema, query, NewPager(1, 1), nil)
+	if total == 0 {
+		return false
+	}
+	e.LoadByID(ids[0], entity, references...)
+	return true
 }
 
 func redisSearch(e *Engine, schema *tableSchema, query *RedisSearchQuery, pager *Pager, references []string) ([]uint64, uint64) {
