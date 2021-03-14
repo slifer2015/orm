@@ -529,4 +529,40 @@ func TestEntityRedisSearch(t *testing.T) {
 	ids, total = engine.RedisSearchIds(entity, query, NewPager(1, 50))
 	assert.Equal(t, uint64(49), total)
 	assert.Len(t, ids, 49)
+
+	entity = &redisSearchEntity{}
+	engine.LoadByID(1, entity)
+	entity.Age = 100
+	flusher = engine.NewFlusher()
+	flusher.Track(entity)
+	flusher.FlushInTransaction()
+
+	query = &RedisSearchQuery{}
+	query.Sort("Age", false).FilterInt("Age", 100)
+	ids, total = engine.RedisSearchIds(entity, query, NewPager(1, 50))
+	assert.Equal(t, uint64(1), total)
+	assert.Len(t, ids, 1)
+	assert.Equal(t, uint64(1), ids[0])
+
+	entity.Age = 101
+	engine.FlushLazy(entity)
+	receiver := NewAsyncConsumer(engine, "default-consumer")
+	receiver.DisableLoop()
+	receiver.block = time.Millisecond
+	receiver.Digest(context.Background(), 100)
+
+	query = &RedisSearchQuery{}
+	query.Sort("Age", false).FilterInt("Age", 101)
+	ids, total = engine.RedisSearchIds(entity, query, NewPager(1, 50))
+	assert.Equal(t, uint64(1), total)
+	assert.Len(t, ids, 1)
+	assert.Equal(t, uint64(1), ids[0])
+
+	engine.GetRedis("search").FlushDB()
+	indexer.Run(context.Background())
+	query = &RedisSearchQuery{}
+	query.Sort("Age", false)
+	ids, total = engine.RedisSearchIds(entity, query, NewPager(1, 10))
+	assert.Equal(t, uint64(49), total)
+	assert.Len(t, ids, 10)
 }

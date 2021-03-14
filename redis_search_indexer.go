@@ -49,14 +49,13 @@ func (r *RedisSearchIndexer) consume(ctx context.Context) bool {
 		for pool, defs := range r.engine.registry.redisSearchIndexes {
 			search := r.engine.GetRedisSearch(pool)
 			stamps := search.redis.HGetAll(redisSearchForceIndexKey)
-			for index, stamp := range stamps {
+			for index, def := range defs {
 				if canceled {
 					return true
 				}
-				def, has := defs[index]
+				stamp, has := stamps[index]
 				if !has {
-					search.redis.HDel(redisSearchForceIndexKey, index)
-					continue
+					stamp = "0:" + strconv.FormatInt(time.Now().UnixNano(), 10)
 				}
 				if stamp[0:3] == "ok:" {
 					continue
@@ -75,14 +74,16 @@ func (r *RedisSearchIndexer) consume(ctx context.Context) bool {
 					hasMore := false
 					nextID := uint64(0)
 					if def.Indexer != nil {
-						newID, hasNext := def.Indexer(id, pusher)
+						newID, hasNext := def.Indexer(r.engine, id, pusher)
 						hasMore = hasNext
 						nextID = newID
 						if pusher.pipeline.commands > 0 {
 							pusher.pipeline.Exec()
 							pusher.pipeline = search.redis.PipeLine()
 						}
-						search.redis.HSet(redisSearchForceIndexKey, index, strconv.FormatUint(nextID, 10)+":"+parts[1])
+						if hasMore {
+							search.redis.HSet(redisSearchForceIndexKey, index, strconv.FormatUint(nextID, 10)+":"+parts[1])
+						}
 					}
 
 					if !hasMore {
@@ -105,6 +106,12 @@ func (r *RedisSearchIndexer) consume(ctx context.Context) bool {
 					id = nextID
 				}
 			}
+			for index := range stamps {
+				_, has := defs[index]
+				if !has {
+					search.redis.HDel(redisSearchForceIndexKey, index)
+				}
+			}
 		}
 		if r.disableLoop {
 			break
@@ -120,7 +127,7 @@ type RedisSearchIndexPusher interface {
 	PushDocument()
 }
 
-type RedisSearchIndexerFunc func(lastID uint64, pusher RedisSearchIndexPusher) (newID uint64, hasMore bool)
+type RedisSearchIndexerFunc func(engine *Engine, lastID uint64, pusher RedisSearchIndexPusher) (newID uint64, hasMore bool)
 
 type redisSearchIndexPusher struct {
 	pipeline *RedisPipeLine

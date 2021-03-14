@@ -28,7 +28,7 @@ func TestRedisSearch(t *testing.T) {
 	testIndex.AddNumericField("age", true, false)
 	testIndex.AddGeoField("location", false, false)
 	testIndex.AddTagField("tags", true, false, ".")
-	testIndex.Indexer = func(lastID uint64, pusher RedisSearchIndexPusher) (newID uint64, hasMore bool) {
+	testIndex.Indexer = func(engine *Engine, lastID uint64, pusher RedisSearchIndexPusher) (newID uint64, hasMore bool) {
 		return 0, false
 	}
 	registry.RegisterRedisSearchIndex(testIndex)
@@ -103,7 +103,7 @@ func TestRedisSearch(t *testing.T) {
 	assert.True(t, info.Fields[4].Sortable)
 	assert.Equal(t, ".", info.Fields[4].TagSeparator)
 
-	testIndex2.Indexer = func(lastID uint64, pusher RedisSearchIndexPusher) (newID uint64, hasMore bool) {
+	testIndex2.Indexer = func(engine *Engine, lastID uint64, pusher RedisSearchIndexPusher) (newID uint64, hasMore bool) {
 		for i := lastID + 1; i <= lastID+100; i++ {
 			id := strconv.Itoa(int(i))
 			pusher.NewDocument("test2:" + id)
@@ -130,7 +130,7 @@ func TestRedisSearch(t *testing.T) {
 	alters[0].Execute()
 	time.Sleep(time.Millisecond * 100)
 
-	testIndex2.Indexer = func(lastID uint64, pusher RedisSearchIndexPusher) (newID uint64, hasMore bool) {
+	testIndex2.Indexer = func(engine *Engine, lastID uint64, pusher RedisSearchIndexPusher) (newID uint64, hasMore bool) {
 		pusher.NewDocument("test2:33")
 		pusher.SetField("number_signed", -10)
 		pusher.SetField("number_float", 2.5)
