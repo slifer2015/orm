@@ -694,13 +694,8 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 				index.AddNumericField(prefix+f.Name, hasSortable, !hasSearchable)
 				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapper
 			}
-			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-				v := uint64(0)
-				return &v
-			}
-			mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-				return *val.(*uint64)
-			}
+			mapBindToScanPointer[prefix+f.Name] = scanUintPointer
+			mapPointerToValue[prefix+f.Name] = pointerUintScan
 		case "*uint",
 			"*uint8",
 			"*uint16",
@@ -711,16 +706,8 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 				index.AddNumericField(prefix+f.Name, hasSortable, !hasSearchable)
 				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableNumeric
 			}
-			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-				return &sql.NullInt64{}
-			}
-			mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-				v := val.(*sql.NullInt64)
-				if v.Valid {
-					return uint64(v.Int64)
-				}
-				return nil
-			}
+			mapBindToScanPointer[prefix+f.Name] = scanIntNullablePointer
+			mapPointerToValue[prefix+f.Name] = pointerUintNullableScan
 		case "int",
 			"int8",
 			"int16",
@@ -731,13 +718,8 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 				index.AddNumericField(prefix+f.Name, hasSortable, !hasSearchable)
 				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapper
 			}
-			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-				v := int64(0)
-				return &v
-			}
-			mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-				return *val.(*int64)
-			}
+			mapBindToScanPointer[prefix+f.Name] = scanIntPointer
+			mapPointerToValue[prefix+f.Name] = pointerIntScan
 		case "*int",
 			"*int8",
 			"*int16",
@@ -748,16 +730,8 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 				index.AddNumericField(prefix+f.Name, hasSortable, !hasSearchable)
 				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableNumeric
 			}
-			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-				return &sql.NullInt64{}
-			}
-			mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-				v := val.(*sql.NullInt64)
-				if v.Valid {
-					return v.Int64
-				}
-				return nil
-			}
+			mapBindToScanPointer[prefix+f.Name] = scanIntNullablePointer
+			mapPointerToValue[prefix+f.Name] = pointerIntNullableScan
 		case "string":
 			fields.strings = append(fields.strings, i)
 			if hasSearchable || hasSortable {
@@ -787,37 +761,19 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 				index.AddTagField(prefix+f.Name, hasSortable, !hasSearchable, ",")
 				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableString
 			}
-			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-				return &sql.NullString{}
-			}
-			mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-				v := val.(*sql.NullString)
-				if v.Valid {
-					return v.String
-				}
-				return nil
-			}
+			mapBindToScanPointer[prefix+f.Name] = scanStringNullablePointer
+			mapPointerToValue[prefix+f.Name] = pointerStringNullableScan
 		case "[]uint8":
 			fields.bytes = append(fields.bytes, i)
 		case "bool":
 			if f.Name == "FakeDelete" {
 				fields.fakeDelete = i
-				mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-					v := uint64(0)
-					return &v
-				}
-				mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-					return *val.(*uint64)
-				}
+				mapBindToScanPointer[prefix+f.Name] = scanUintPointer
+				mapPointerToValue[prefix+f.Name] = pointerUintScan
 			} else {
 				fields.booleans = append(fields.booleans, i)
-				mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-					v := false
-					return &v
-				}
-				mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-					return *val.(*bool)
-				}
+				mapBindToScanPointer[prefix+f.Name] = scanBoolPointer
+				mapPointerToValue[prefix+f.Name] = pointerBoolScan
 			}
 			if hasSearchable || hasSortable {
 				index.AddTagField(prefix+f.Name, hasSortable, !hasSearchable, ",")
@@ -829,16 +785,8 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 				index.AddTagField(prefix+f.Name, hasSortable, !hasSearchable, ",")
 				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableBool
 			}
-			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-				return &sql.NullBool{}
-			}
-			mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-				v := val.(*sql.NullBool)
-				if v.Valid {
-					return v.Bool
-				}
-				return nil
-			}
+			mapBindToScanPointer[prefix+f.Name] = scanBoolNullablePointer
+			mapPointerToValue[prefix+f.Name] = pointerBoolNullableScan
 		case "float32",
 			"float64":
 			fields.floats = append(fields.floats, i)
@@ -846,13 +794,8 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 				index.AddNumericField(prefix+f.Name, hasSortable, !hasSearchable)
 				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapper
 			}
-			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-				v := float64(0)
-				return &v
-			}
-			mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-				return *val.(*float64)
-			}
+			mapBindToScanPointer[prefix+f.Name] = scanFloatPointer
+			mapPointerToValue[prefix+f.Name] = pointerFloatScan
 		case "*float32",
 			"*float64":
 			fields.floatsNullable = append(fields.floatsNullable, i)
@@ -860,45 +803,24 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 				index.AddNumericField(prefix+f.Name, hasSortable, !hasSearchable)
 				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableNumeric
 			}
-			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-				return &sql.NullFloat64{}
-			}
-			mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-				v := val.(*sql.NullFloat64)
-				if v.Valid {
-					return v.Float64
-				}
-				return nil
-			}
+			mapBindToScanPointer[prefix+f.Name] = scanFloatNullablePointer
+			mapPointerToValue[prefix+f.Name] = pointerFloatNullableScan
 		case "*time.Time":
 			fields.timesNullable = append(fields.timesNullable, i)
 			if hasSearchable || hasSortable {
 				index.AddNumericField(prefix+f.Name, hasSortable, !hasSearchable)
 				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableTime
 			}
-			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-				return &sql.NullString{}
-			}
-			mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-				v := val.(*sql.NullString)
-				if v.Valid {
-					return v.String
-				}
-				return nil
-			}
+			mapBindToScanPointer[prefix+f.Name] = scanStringNullablePointer
+			mapPointerToValue[prefix+f.Name] = pointerStringNullableScan
 		case "time.Time":
 			fields.times = append(fields.times, i)
 			if hasSearchable || hasSortable {
 				index.AddNumericField(prefix+f.Name, hasSortable, !hasSearchable)
 				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableTime
 			}
-			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-				v := ""
-				return &v
-			}
-			mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-				return *val.(*string)
-			}
+			mapBindToScanPointer[prefix+f.Name] = scanStringPointer
+			mapPointerToValue[prefix+f.Name] = pointerStringScan
 		default:
 			k := f.Type.Kind().String()
 			if k == "struct" {
@@ -913,16 +835,8 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 						index.AddNumericField(prefix+f.Name, hasSortable, !hasSearchable)
 						mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableNumeric
 					}
-					mapBindToScanPointer[prefix+f.Name] = func() interface{} {
-						return &sql.NullInt64{}
-					}
-					mapPointerToValue[prefix+f.Name] = func(val interface{}) interface{} {
-						v := val.(*sql.NullInt64)
-						if v.Valid {
-							return v.Int64
-						}
-						return nil
-					}
+					mapBindToScanPointer[prefix+f.Name] = scanIntNullablePointer
+					mapPointerToValue[prefix+f.Name] = pointerUintNullableScan
 				}
 			} else {
 				if typeName[0:3] == "[]*" {
@@ -1101,4 +1015,105 @@ var defaultRedisSearchMapperNullableTime = func(val interface{}) interface{} {
 	}
 	t, _ := time.ParseInLocation("2006-01-02", v, time.Local)
 	return t.Unix()
+}
+
+var scanUintPointer = func() interface{} {
+	v := uint64(0)
+	return &v
+}
+
+var pointerUintScan = func(val interface{}) interface{} {
+	return *val.(*uint64)
+}
+
+var scanIntNullablePointer = func() interface{} {
+	return &sql.NullInt64{}
+}
+
+var pointerUintNullableScan = func(val interface{}) interface{} {
+	v := val.(*sql.NullInt64)
+	if v.Valid {
+		return uint64(v.Int64)
+	}
+	return nil
+}
+
+var scanIntPointer = func() interface{} {
+	v := int64(0)
+	return &v
+}
+
+var pointerIntScan = func(val interface{}) interface{} {
+	return *val.(*int64)
+}
+
+var pointerIntNullableScan = func(val interface{}) interface{} {
+	v := val.(*sql.NullInt64)
+	if v.Valid {
+		return v.Int64
+	}
+	return nil
+}
+
+var scanStringNullablePointer = func() interface{} {
+	return &sql.NullString{}
+}
+
+var pointerStringNullableScan = func(val interface{}) interface{} {
+	v := val.(*sql.NullString)
+	if v.Valid {
+		return v.String
+	}
+	return nil
+}
+
+var scanBoolPointer = func() interface{} {
+	v := false
+	return &v
+}
+
+var pointerBoolScan = func(val interface{}) interface{} {
+	return *val.(*bool)
+}
+
+var scanBoolNullablePointer = func() interface{} {
+	return &sql.NullBool{}
+}
+
+var pointerBoolNullableScan = func(val interface{}) interface{} {
+	v := val.(*sql.NullBool)
+	if v.Valid {
+		return v.Bool
+	}
+	return nil
+}
+
+var scanFloatPointer = func() interface{} {
+	v := float64(0)
+	return &v
+}
+
+var pointerFloatScan = func(val interface{}) interface{} {
+	return *val.(*float64)
+}
+
+var scanFloatNullablePointer = func() interface{} {
+	return &sql.NullFloat64{}
+}
+
+var pointerFloatNullableScan = func(val interface{}) interface{} {
+	v := val.(*sql.NullFloat64)
+	if v.Valid {
+		return v.Float64
+	}
+	return nil
+}
+
+var scanStringPointer = func() interface{} {
+	v := ""
+	return &v
+}
+
+var pointerStringScan = func(val interface{}) interface{} {
+	return *val.(*string)
 }
