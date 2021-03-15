@@ -499,7 +499,11 @@ func initTableSchema(registry *Registry, entityType reflect.Type) (*tableSchema,
 			indexQuery += ",`" + column + "`"
 			indexColumns = append(indexColumns, column)
 		}
-		indexQuery += " FROM `" + table + "` WHERE `ID` > ? ORDER BY `ID` LIMIT 5000"
+		indexQuery += " FROM `" + table + "` WHERE `ID` > ?"
+		if hasFakeDelete {
+			indexQuery += " AND FakeDelete = 0"
+		}
+		indexQuery += " ORDER BY `ID` LIMIT 5000"
 		redisSearchIndex.Indexer = func(engine *Engine, lastID uint64, pusher RedisSearchIndexPusher) (newID uint64, hasMore bool) {
 			results, def := engine.GetMysql(mysql).Query(indexQuery, lastID)
 			defer def()
@@ -768,16 +772,14 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 		case "bool":
 			if f.Name == "FakeDelete" {
 				fields.fakeDelete = i
-				mapBindToScanPointer[prefix+f.Name] = scanUintPointer
-				mapPointerToValue[prefix+f.Name] = pointerUintScan
 			} else {
 				fields.booleans = append(fields.booleans, i)
 				mapBindToScanPointer[prefix+f.Name] = scanBoolPointer
 				mapPointerToValue[prefix+f.Name] = pointerBoolScan
-			}
-			if hasSearchable || hasSortable {
-				index.AddTagField(prefix+f.Name, hasSortable, !hasSearchable, ",")
-				mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableBool
+				if hasSearchable || hasSortable {
+					index.AddTagField(prefix+f.Name, hasSortable, !hasSearchable, ",")
+					mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableBool
+				}
 			}
 		case "*bool":
 			fields.booleansNullable = append(fields.booleansNullable, i)

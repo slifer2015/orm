@@ -31,6 +31,7 @@ type redisSearchEntity struct {
 	DateTime        time.Time          `orm:"time;searchable"`
 	DateNullable    *time.Time         `orm:"searchable"`
 	Ref             *redisSearchEntity `orm:"searchable"`
+	FakeDelete      bool
 }
 
 func TestEntityRedisSearch(t *testing.T) {

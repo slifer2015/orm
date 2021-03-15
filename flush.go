@@ -1193,6 +1193,12 @@ func updateCacheForInserted(engine *Engine, entity Entity, lazy bool, id uint64,
 
 func fillRedisSearchFromBind(schema *tableSchema, redisFlusher RedisFlusher, bind map[string]interface{}, id uint64) {
 	if schema.hasSearchCache {
+		if schema.hasFakeDelete {
+			val, has := bind["FakeDelete"]
+			if has && val.(uint64) > 0 {
+				redisFlusher.Del(schema.searchCacheName, schema.redisSearchPrefix+strconv.FormatUint(id, 10))
+			}
+		}
 		values := make([]interface{}, 0)
 		for k, f := range schema.mapBindToRedisSearch {
 			v, has := bind[k]
@@ -1201,8 +1207,7 @@ func fillRedisSearchFromBind(schema *tableSchema, redisFlusher RedisFlusher, bin
 			}
 		}
 		if len(values) > 0 {
-			key := schema.redisSearchPrefix + strconv.FormatUint(id, 10)
-			redisFlusher.HSet(schema.searchCacheName, key, values...)
+			redisFlusher.HSet(schema.searchCacheName, schema.redisSearchPrefix+strconv.FormatUint(id, 10), values...)
 		}
 	}
 }
