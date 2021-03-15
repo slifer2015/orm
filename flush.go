@@ -39,7 +39,7 @@ func (err *ForeignKeyError) Error() string {
 type dataLoaderSets map[*tableSchema]map[uint64][]interface{}
 
 func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[reflect.Type]map[uint64][]interface{},
-	root bool, lazy bool, transaction bool, smart bool, entities ...Entity) {
+	root bool, lazy bool, transaction bool, entities ...Entity) {
 	insertKeys := make(map[reflect.Type][]string)
 	insertValues := make(map[reflect.Type]string)
 	insertArguments := make(map[reflect.Type][]interface{})
@@ -242,19 +242,10 @@ func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[refle
 			if lazy {
 				fillLazyQuery(lazyMap, db.GetPoolCode(), sql, nil)
 			} else {
-				smartUpdate := false
-				if smart && !db.inTransaction && schema.hasLocalCache && !schema.hasRedisCache {
-					keys := getCacheQueriesKeys(schema, bind, dbData, false)
-					smartUpdate = len(keys) == 0
+				if updateSQLs == nil {
+					updateSQLs = make(map[string][]string)
 				}
-				if smartUpdate {
-					fillLazyQuery(lazyMap, db.GetPoolCode(), sql, nil)
-				} else {
-					if updateSQLs == nil {
-						updateSQLs = make(map[string][]string)
-					}
-					updateSQLs[schema.mysqlPoolName] = append(updateSQLs[schema.mysqlPoolName], sql)
-				}
+				updateSQLs[schema.mysqlPoolName] = append(updateSQLs[schema.mysqlPoolName], sql)
 			}
 			updateCacheAfterUpdate(lazy, dbData, engine, entity, bind, schema, localCacheSets, localCacheDeletes, db, currentID,
 				rFlusher, dataLoaderSets)
@@ -271,7 +262,7 @@ func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[refle
 			toFlush[i] = v
 			i++
 		}
-		flush(engine, updateSQLs, deleteBinds, false, false, transaction, false, toFlush...)
+		flush(engine, updateSQLs, deleteBinds, false, false, transaction, toFlush...)
 		rest := make([]Entity, 0)
 		for _, v := range entities {
 			_, has := referencesToFlash[v]
@@ -279,7 +270,7 @@ func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[refle
 				rest = append(rest, v)
 			}
 		}
-		flush(engine, updateSQLs, deleteBinds, true, false, transaction, false, rest...)
+		flush(engine, updateSQLs, deleteBinds, true, false, transaction, rest...)
 		return
 	}
 	for typeOf, values := range insertKeys {
@@ -364,7 +355,7 @@ func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[refle
 										toDeleteValue.markToDelete()
 										toDeleteAll[i] = toDeleteValue
 									}
-									flush(engine, nil, nil, true, transaction, lazy, false, toDeleteAll...)
+									flush(engine, nil, nil, true, transaction, lazy, toDeleteAll...)
 								}
 							}
 						}

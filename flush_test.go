@@ -86,13 +86,6 @@ type flushEntityReferenceCascade struct {
 	ReferenceTwo *flushEntity `orm:"cascade"`
 }
 
-type flushEntitySmart struct {
-	ORM  `orm:"localCache"`
-	ID   uint
-	Name string
-	Age  int
-}
-
 func TestFlushLocalRedis(t *testing.T) {
 	testFlush(t, true, true)
 }
@@ -113,10 +106,9 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	var entity *flushEntity
 	var reference *flushEntityReference
 	var referenceCascade *flushEntityReferenceCascade
-	var entitySmart *flushEntitySmart
 	registry := &Registry{}
 	registry.RegisterEnumSlice("orm.TestEnum", []string{"a", "b", "c"})
-	engine := PrepareTables(t, registry, 5, entity, reference, referenceCascade, entitySmart)
+	engine := PrepareTables(t, registry, 5, entity, reference, referenceCascade)
 
 	schema := engine.registry.GetTableSchemaForEntity(entity).(*tableSchema)
 	if !local {
@@ -511,30 +503,12 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	assert.True(t, found)
 	assert.Equal(t, 2, entity2.Age)
 
-	entitySmart = &flushEntitySmart{Name: "Test", Age: 18}
-	engine.Flush(entitySmart)
-	assert.Equal(t, uint(1), entitySmart.ID)
-	entitySmart = &flushEntitySmart{}
-	found = engine.LoadByID(1, entitySmart)
-	assert.True(t, found)
-	entitySmart.Age = 20
-
 	receiver := NewAsyncConsumer(engine, "default-consumer")
 	receiver.DisableLoop()
 	receiver.block = time.Millisecond
 
 	testLogger := memory.New()
 	engine.AddQueryLogger(testLogger, apexLog.InfoLevel, QueryLoggerSourceDB)
-	engine.Flush(entitySmart)
-	entitySmart = &flushEntitySmart{}
-	found = engine.LoadByID(1, entitySmart)
-	assert.True(t, found)
-	assert.Equal(t, 20, entitySmart.Age)
-	assert.Len(t, testLogger.Entries, 0)
-	validHeartBeat := false
-	receiver.SetHeartBeat(time.Minute, func() {
-		validHeartBeat = true
-	})
 
 	flusher = engine.NewFlusher()
 	entity1 := &flushEntity{}
@@ -553,11 +527,9 @@ func testFlush(t *testing.T, local bool, redis bool) {
 		return
 	}
 	receiver.Digest(context.Background(), 100)
-	assert.True(t, validHeartBeat)
-	assert.Len(t, testLogger.Entries, 2)
+	assert.Len(t, testLogger.Entries, 1)
 	assert.Equal(t, "UPDATE flushEntity SET `Age`=99 WHERE `ID` = 10;UPDATE flushEntity SET `Uint`=99 "+
 		"WHERE `ID` = 11;UPDATE flushEntity SET `Name`='sss' WHERE `ID` = 12;", testLogger.Entries[0].Fields["Query"])
-	assert.Equal(t, "UPDATE flushEntitySmart SET `Age`=20 WHERE `ID` = 1", testLogger.Entries[1].Fields["Query"])
 
 	entity = &flushEntity{Name: "Monica", EnumNotNull: "a", ReferenceMany: []*flushEntityReference{{Name: "Adam Junior"}}}
 	engine.Flush(entity)

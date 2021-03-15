@@ -66,7 +66,7 @@ func (f *flusher) ForceDelete(entity ...Entity) Flusher {
 }
 
 func (f *flusher) Flush() {
-	f.flushTrackedEntities(false, false, true)
+	f.flushTrackedEntities(false, false)
 }
 
 func (f *flusher) FlushWithCheck() error {
@@ -87,17 +87,17 @@ func (f *flusher) FlushWithFullCheck() error {
 				err = asErr
 			}
 		}()
-		f.flushTrackedEntities(false, false, false)
+		f.flushTrackedEntities(false, false)
 	}()
 	return err
 }
 
 func (f *flusher) FlushLazy() {
-	f.flushTrackedEntities(true, false, false)
+	f.flushTrackedEntities(true, false)
 }
 
 func (f *flusher) FlushInTransaction() {
-	f.flushTrackedEntities(false, true, false)
+	f.flushTrackedEntities(false, true)
 }
 
 func (f *flusher) FlushWithLock(lockerPool string, lockName string, ttl time.Duration, waitTimeout time.Duration) {
@@ -124,7 +124,7 @@ func (f *flusher) MarkDirty(entity Entity, queueCode string, ids ...uint64) {
 	flusher.Flush()
 }
 
-func (f *flusher) flushTrackedEntities(lazy bool, transaction bool, smart bool) {
+func (f *flusher) flushTrackedEntities(lazy bool, transaction bool) {
 	if f.trackedEntitiesCounter == 0 {
 		return
 	}
@@ -146,7 +146,7 @@ func (f *flusher) flushTrackedEntities(lazy bool, transaction bool, smart bool) 
 			db.Rollback()
 		}
 	}()
-	flush(f.engine, nil, nil, true, lazy, transaction, smart, f.trackedEntities...)
+	flush(f.engine, nil, nil, true, lazy, transaction, f.trackedEntities...)
 	if transaction {
 		for _, db := range dbPools {
 			db.Commit()
@@ -174,7 +174,7 @@ func (f *flusher) flushWithCheck(transaction bool) error {
 				panic(asErr)
 			}
 		}()
-		f.flushTrackedEntities(false, transaction, false)
+		f.flushTrackedEntities(false, transaction)
 	}()
 	return err
 }
@@ -186,5 +186,5 @@ func (f *flusher) flushWithLock(transaction bool, lockerPool string, lockName st
 		panic(errors.New("lock wait timeout"))
 	}
 	defer lock.Release()
-	f.flushTrackedEntities(false, transaction, false)
+	f.flushTrackedEntities(false, transaction)
 }
