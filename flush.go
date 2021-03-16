@@ -413,16 +413,7 @@ func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[refle
 			keys[i] = key
 			i++
 		}
-		if lazy {
-			deletesLocalCache := lazyMap["cl"]
-			if deletesLocalCache == nil {
-				deletesLocalCache = make(map[string][]string)
-				lazyMap["cl"] = deletesLocalCache
-			}
-			deletesLocalCache.(map[string][]string)[cacheCode] = keys
-		} else {
-			engine.GetLocalCache(cacheCode).Remove(keys...)
-		}
+		engine.GetLocalCache(cacheCode).Remove(keys...)
 	}
 	if lazy {
 		deletesRedisCache, has := lazyMap["cr"].(map[string][]string)
@@ -478,9 +469,6 @@ func updateCacheAfterUpdate(lazy bool, dbData []interface{}, engine *Engine, ent
 	if hasLocalCache {
 		cacheKey := schema.getCacheKey(currentID)
 		addLocalCacheSet(localCacheSets, db.GetPoolCode(), localCache.code, cacheKey, buildLocalCacheValue(entity))
-		if lazy {
-			addLocalCacheDeletes(localCacheDeletes, localCache.code, cacheKey)
-		}
 		keys := getCacheQueriesKeys(schema, bind, dbData, false)
 		addLocalCacheDeletes(localCacheDeletes, localCache.code, keys...)
 		keys = getCacheQueriesKeys(schema, bind, old, false)

@@ -51,6 +51,7 @@ func TestLazyReceiver(t *testing.T) {
 	receiver.Digest(context.Background(), 100)
 	assert.True(t, validHeartBeat)
 
+	engine.GetLocalCache().Clear()
 	loaded = engine.LoadByID(1, e)
 	assert.True(t, loaded)
 	assert.Equal(t, "John", e.Name)
@@ -80,7 +81,7 @@ func TestLazyReceiver(t *testing.T) {
 	e = &lazyReceiverEntity{}
 	loaded = engine.LoadByID(1, e)
 	assert.True(t, loaded)
-	assert.Equal(t, "Tom", e.Name)
+	assert.Equal(t, "John", e.Name)
 
 	e = &lazyReceiverEntity{Name: "Tom"}
 	e.SetOnDuplicateKeyUpdate(map[string]interface{}{"Age": 38})

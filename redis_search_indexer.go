@@ -78,8 +78,7 @@ func (r *RedisSearchIndexer) consume(ctx context.Context) bool {
 						hasMore = hasNext
 						nextID = newID
 						if pusher.pipeline.commands > 0 {
-							pusher.pipeline.Exec()
-							pusher.pipeline = search.redis.PipeLine()
+							pusher.Flush()
 						}
 						if hasMore {
 							search.redis.HSet(redisSearchForceIndexKey, index, strconv.FormatUint(nextID, 10)+":"+parts[1])
@@ -125,6 +124,7 @@ type RedisSearchIndexPusher interface {
 	NewDocument(key string)
 	SetField(key string, value interface{})
 	PushDocument()
+	Flush()
 }
 
 type RedisSearchIndexerFunc func(engine *Engine, lastID uint64, pusher RedisSearchIndexPusher) (newID uint64, hasMore bool)
@@ -133,6 +133,10 @@ type redisSearchIndexPusher struct {
 	pipeline *RedisPipeLine
 	key      string
 	fields   []interface{}
+}
+
+func (e *Engine) NewRedisSearchIndexPusher(pool string) RedisSearchIndexPusher {
+	return &redisSearchIndexPusher{pipeline: e.GetRedis(pool).PipeLine()}
 }
 
 func (p *redisSearchIndexPusher) NewDocument(key string) {
@@ -147,4 +151,14 @@ func (p *redisSearchIndexPusher) PushDocument() {
 	p.pipeline.HSet(p.key, p.fields...)
 	p.key = ""
 	p.fields = p.fields[:0]
+	if p.pipeline.commands > 10000 {
+		p.Flush()
+	}
+}
+
+func (p *redisSearchIndexPusher) Flush() {
+	if p.pipeline.commands > 0 || p.pipeline.xaddCommands > 0 {
+		p.pipeline.Exec()
+		p.pipeline = p.pipeline.engine.GetRedis(p.pipeline.pool).PipeLine()
+	}
 }
