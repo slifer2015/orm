@@ -119,13 +119,18 @@ func (r *AsyncConsumer) handleLazy(event Event) {
 		return
 	}
 	ids := r.handleQueries(r.engine, data)
-	r.handleClearCache(data, "cl", ids)
-	r.handleClearCache(data, "cr", ids)
+	if ids != nil {
+		r.handleClearCache(data, "cl", ids)
+		r.handleClearCache(data, "cr", ids)
+	}
 	event.Ack()
 }
 
 func (r *AsyncConsumer) handleQueries(engine *Engine, validMap map[string]interface{}) []uint64 {
 	queries := validMap["q"]
+	if queries == nil {
+		return nil
+	}
 	validQueries := queries.([]interface{})
 	ids := make([]uint64, len(validQueries))
 	for i, query := range validQueries {
