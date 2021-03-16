@@ -119,9 +119,7 @@ func (r *AsyncConsumer) handleLazy(event Event) {
 		return
 	}
 	ids := r.handleQueries(r.engine, data)
-	if ids != nil {
-		r.handleRedisCache(data, ids)
-	}
+	r.handleRedisCache(data, ids)
 	event.Ack()
 }
 
