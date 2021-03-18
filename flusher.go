@@ -146,7 +146,11 @@ func (f *flusher) flushTrackedEntities(lazy bool, transaction bool) {
 			db.Rollback()
 		}
 	}()
-	flush(f.engine, nil, nil, true, lazy, transaction, f.trackedEntities...)
+	rFlusher := f.engine.afterCommitRedisFlusher
+	if rFlusher == nil {
+		rFlusher = &redisFlusher{engine: f.engine}
+	}
+	flush(f.engine, rFlusher, nil, nil, true, lazy, transaction, f.trackedEntities...)
 	if transaction {
 		for _, db := range dbPools {
 			db.Commit()

@@ -38,7 +38,7 @@ func (err *ForeignKeyError) Error() string {
 
 type dataLoaderSets map[*tableSchema]map[uint64][]interface{}
 
-func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[reflect.Type]map[uint64][]interface{},
+func flush(engine *Engine, rFlusher *redisFlusher, updateSQLs map[string][]string, deleteBinds map[reflect.Type]map[uint64][]interface{},
 	root bool, lazy bool, transaction bool, entities ...Entity) {
 	insertKeys := make(map[reflect.Type][]string)
 	insertValues := make(map[reflect.Type]string)
@@ -50,10 +50,6 @@ func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[refle
 	dataLoaderSets := make(map[*tableSchema]map[uint64][]interface{})
 	localCacheDeletes := make(map[string]map[string]bool)
 	lazyMap := make(map[string]interface{})
-	rFlusher := engine.afterCommitRedisFlusher
-	if rFlusher == nil {
-		rFlusher = &redisFlusher{engine: engine}
-	}
 	isInTransaction := transaction
 
 	var referencesToFlash map[Entity]Entity
@@ -262,7 +258,7 @@ func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[refle
 			toFlush[i] = v
 			i++
 		}
-		flush(engine, updateSQLs, deleteBinds, false, false, transaction, toFlush...)
+		flush(engine, rFlusher, updateSQLs, deleteBinds, false, false, transaction, toFlush...)
 		rest := make([]Entity, 0)
 		for _, v := range entities {
 			_, has := referencesToFlash[v]
@@ -270,7 +266,7 @@ func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[refle
 				rest = append(rest, v)
 			}
 		}
-		flush(engine, updateSQLs, deleteBinds, true, false, transaction, rest...)
+		flush(engine, rFlusher, updateSQLs, deleteBinds, true, false, transaction, rest...)
 		return
 	}
 	for typeOf, values := range insertKeys {
@@ -355,7 +351,7 @@ func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[refle
 										toDeleteValue.markToDelete()
 										toDeleteAll[i] = toDeleteValue
 									}
-									flush(engine, nil, nil, true, transaction, lazy, toDeleteAll...)
+									flush(engine, rFlusher, nil, nil, true, transaction, lazy, toDeleteAll...)
 								}
 							}
 						}
@@ -449,7 +445,7 @@ func flush(engine *Engine, updateSQLs map[string][]string, deleteBinds map[refle
 	if len(lazyMap) > 0 {
 		rFlusher.Publish(lazyChannelName, lazyMap)
 	}
-	if !isInTransaction {
+	if !isInTransaction && root {
 		rFlusher.Flush()
 	}
 }

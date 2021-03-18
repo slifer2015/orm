@@ -73,7 +73,7 @@ type flushEntity struct {
 }
 
 type flushEntityReference struct {
-	ORM
+	ORM  `orm:"localCache;redisCache"`
 	ID   uint
 	Name string
 	Age  int
@@ -112,13 +112,18 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	engine := PrepareTables(t, registry, 5, entity, reference, referenceCascade)
 
 	schema := engine.registry.GetTableSchemaForEntity(entity).(*tableSchema)
+	schema2 := engine.registry.GetTableSchemaForEntity(reference).(*tableSchema)
 	if !local {
 		schema.hasLocalCache = false
 		schema.localCacheName = ""
+		schema2.hasLocalCache = false
+		schema2.localCacheName = ""
 	}
 	if !redis {
 		schema.hasRedisCache = false
 		schema.redisCacheName = ""
+		schema2.hasRedisCache = false
+		schema2.redisCacheName = ""
 	}
 
 	now := time.Now()
@@ -524,13 +529,12 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	flusher.Track(entity1, entity2, entity3)
 	flusher.Flush()
 
-	if !local || !redis {
-		return
-	}
 	receiver.Digest(context.Background(), 100)
-	assert.Len(t, testLogger.Entries, 1)
-	assert.Equal(t, "UPDATE flushEntity SET `Age`=99 WHERE `ID` = 10;UPDATE flushEntity SET `Uint`=99 "+
-		"WHERE `ID` = 11;UPDATE flushEntity SET `Name`='sss' WHERE `ID` = 12;", testLogger.Entries[0].Fields["Query"])
+	if local {
+		assert.Len(t, testLogger.Entries, 1)
+		assert.Equal(t, "UPDATE flushEntity SET `Age`=99 WHERE `ID` = 10;UPDATE flushEntity SET `Uint`=99 "+
+			"WHERE `ID` = 11;UPDATE flushEntity SET `Name`='sss' WHERE `ID` = 12;", testLogger.Entries[0].Fields["Query"])
+	}
 
 	entity = &flushEntity{Name: "Monica", EnumNotNull: "a", ReferenceMany: []*flushEntityReference{{Name: "Adam Junior"}}}
 	engine.Flush(entity)
@@ -587,7 +591,8 @@ func testFlush(t *testing.T, local bool, redis bool) {
 		e.ReferenceOne = newRef
 		flusher.Track(e)
 	}
-	flusher.FlushInTransaction()
+
+	flusher.Flush()
 	entities = make([]*flushEntity, 0)
 	engine.LoadByIDs([]uint64{14, 15, 16}, &entities, "ReferenceOne")
 	assert.Equal(t, "1435", entities[0].Name)
