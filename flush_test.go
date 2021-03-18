@@ -24,7 +24,7 @@ type flushStruct struct {
 }
 
 type flushEntity struct {
-	ORM                  `orm:"localCache;redisCache"`
+	ORM                  `orm:"localCache;redisCache;dirty=entity_changed"`
 	ID                   uint
 	City                 string `orm:"unique=city"`
 	Name                 string `orm:"unique=name;required"`
@@ -107,6 +107,7 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	var reference *flushEntityReference
 	var referenceCascade *flushEntityReferenceCascade
 	registry := &Registry{}
+	registry.RegisterRedisStream("entity_changed", "default", []string{"test-group-1"})
 	registry.RegisterEnumSlice("orm.TestEnum", []string{"a", "b", "c"})
 	engine := PrepareTables(t, registry, 5, entity, reference, referenceCascade)
 
@@ -578,26 +579,26 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	flusher = engine.NewFlusher()
 	for _, e := range entities {
 		newRef := &flushEntityReference{}
-		newRef.Name = e.ReferenceOne.Name + "3"
+		newRef.Name = fmt.Sprintf("%d33", e.ID)
 		oldRef := e.ReferenceOne
-		oldRef.Name = oldRef.Name + "2"
+		oldRef.Name = fmt.Sprintf("%d34", e.ID)
 		flusher.Track(oldRef)
-		e.Name = e.Name + "2"
+		e.Name = fmt.Sprintf("%d35", e.ID)
 		e.ReferenceOne = newRef
 		flusher.Track(e)
 	}
-	flusher.Flush()
+	flusher.FlushInTransaction()
 	entities = make([]*flushEntity, 0)
 	engine.LoadByIDs([]uint64{14, 15, 16}, &entities, "ReferenceOne")
-	assert.Equal(t, "A2", entities[0].Name)
-	assert.Equal(t, "B2", entities[1].Name)
-	assert.Equal(t, "C2", entities[2].Name)
-	assert.Equal(t, "John3", entities[0].ReferenceOne.Name)
-	assert.Equal(t, "Adam3", entities[1].ReferenceOne.Name)
-	assert.Equal(t, "Adam Junior3", entities[2].ReferenceOne.Name)
+	assert.Equal(t, "1435", entities[0].Name)
+	assert.Equal(t, "1535", entities[1].Name)
+	assert.Equal(t, "1635", entities[2].Name)
+	assert.Equal(t, "1433", entities[0].ReferenceOne.Name)
+	assert.Equal(t, "1533", entities[1].ReferenceOne.Name)
+	assert.Equal(t, "1633", entities[2].ReferenceOne.Name)
 	entitiesRefs := make([]*flushEntityReference, 0)
 	engine.LoadByIDs([]uint64{1, 2, 3}, &entitiesRefs)
-	assert.Equal(t, "John2", entitiesRefs[0].Name)
-	assert.Equal(t, "Adam2", entitiesRefs[1].Name)
-	assert.Equal(t, "Adam Junior2", entitiesRefs[2].Name)
+	assert.Equal(t, "1434", entitiesRefs[0].Name)
+	assert.Equal(t, "1534", entitiesRefs[1].Name)
+	assert.Equal(t, "1634", entitiesRefs[2].Name)
 }

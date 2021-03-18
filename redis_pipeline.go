@@ -11,52 +11,77 @@ import (
 )
 
 type RedisPipeLine struct {
-	engine       *Engine
-	pool         string
-	pipeLine     redis.Pipeliner
-	ctx          context.Context
-	executed     bool
-	commands     int
-	xaddCommands int
+	engine   *Engine
+	pool     string
+	pipeLine redis.Pipeliner
+	ctx      context.Context
+	executed bool
+	commands int
+	log      []string
 }
 
 func (rp *RedisPipeLine) Del(key ...string) *PipeLineInt {
 	rp.commands++
+	if rp.engine.hasRedisLogger {
+		rp.log = append(rp.log, "DEL")
+		rp.log = append(rp.log, key...)
+	}
 	return &PipeLineInt{p: rp, cmd: rp.pipeLine.Del(rp.ctx, key...)}
 }
 
 func (rp *RedisPipeLine) Get(key string) *PipeLineGet {
 	rp.commands++
+	if rp.engine.hasRedisLogger {
+		rp.log = append(rp.log, "GET", key)
+	}
 	return &PipeLineGet{p: rp, cmd: rp.pipeLine.Get(rp.ctx, key)}
 }
 
 func (rp *RedisPipeLine) Set(key string, value interface{}, expiration time.Duration) *PipeLineStatus {
 	rp.commands++
+	if rp.engine.hasRedisLogger {
+		rp.log = append(rp.log, "SET", key)
+	}
 	return &PipeLineStatus{p: rp, cmd: rp.pipeLine.Set(rp.ctx, key, value, expiration)}
 }
 
 func (rp *RedisPipeLine) Expire(key string, expiration time.Duration) *PipeLineBool {
 	rp.commands++
+	if rp.engine.hasRedisLogger {
+		rp.log = append(rp.log, "EXPIRE", key)
+	}
 	return &PipeLineBool{p: rp, cmd: rp.pipeLine.Expire(rp.ctx, key, expiration)}
 }
 
 func (rp *RedisPipeLine) HIncrBy(key, field string, incr int64) *PipeLineInt {
 	rp.commands++
+	if rp.engine.hasRedisLogger {
+		rp.log = append(rp.log, "HIncrBy", key)
+	}
 	return &PipeLineInt{p: rp, cmd: rp.pipeLine.HIncrBy(rp.ctx, key, field, incr)}
 }
 
 func (rp *RedisPipeLine) HSet(key string, values ...interface{}) *PipeLineInt {
 	rp.commands++
+	if rp.engine.hasRedisLogger {
+		rp.log = append(rp.log, "HSet", key)
+	}
 	return &PipeLineInt{p: rp, cmd: rp.pipeLine.HSet(rp.ctx, key, values...)}
 }
 
 func (rp *RedisPipeLine) HDel(key string, values ...string) *PipeLineInt {
 	rp.commands++
+	if rp.engine.hasRedisLogger {
+		rp.log = append(rp.log, "HDel", key)
+	}
 	return &PipeLineInt{p: rp, cmd: rp.pipeLine.HDel(rp.ctx, key, values...)}
 }
 
 func (rp *RedisPipeLine) XAdd(stream string, values interface{}) *PipeLineString {
-	rp.xaddCommands++
+	rp.commands++
+	if rp.engine.hasRedisLogger {
+		rp.log = append(rp.log, "XAdd", stream)
+	}
 	return &PipeLineString{p: rp, cmd: rp.pipeLine.XAdd(rp.ctx, &redis.XAddArgs{Stream: stream, Values: values})}
 }
 
@@ -136,34 +161,14 @@ func (c *PipeLineStatus) Result() error {
 }
 
 func (rp *RedisPipeLine) fillLogFields(start time.Time, err error) {
-	if rp.engine.hasStreamsLogger && rp.xaddCommands > 0 {
-		message := "[ORM][STREAMS][XADD]"
-		now := time.Now()
-		stop := time.Since(start).Microseconds()
-		e := rp.engine.queryLoggers[QueryLoggerSourceStreams].log.WithFields(log2.Fields{
-			"microseconds": stop,
-			"operation":    "xadd",
-			"events":       rp.xaddCommands,
-			"pool":         rp.pool,
-			"target":       "streams",
-			"started":      start.UnixNano(),
-			"finished":     now.UnixNano(),
-		})
-
-		if err != nil {
-			injectLogError(err, e).Error(message)
-		} else {
-			e.Info(message)
-		}
-	}
-	if rp.engine.hasRedisLogger && rp.commands > 0 {
+	if rp.engine.hasRedisLogger {
 		message := "[ORM][REDIS][EXEC]"
 		now := time.Now()
 		stop := time.Since(start).Microseconds()
 		e := rp.engine.queryLoggers[QueryLoggerSourceRedis].log.WithFields(log2.Fields{
 			"microseconds": stop,
 			"operation":    "exec",
-			"commands":     rp.commands,
+			"commands":     rp.log,
 			"pool":         rp.pool,
 			"target":       "redis",
 			"started":      start.UnixNano(),
