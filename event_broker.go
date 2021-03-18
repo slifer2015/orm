@@ -28,6 +28,7 @@ type Event interface {
 	Stream() string
 	RawData() map[string]interface{}
 	Unserialize(val interface{}) error
+	IsSerialized() bool
 }
 
 type event struct {
@@ -65,6 +66,11 @@ func (ev *event) Unserialize(value interface{}) error {
 		return fmt.Errorf("event without struct data")
 	}
 	return jsoniter.ConfigFastest.Unmarshal([]byte(val.(string)), &value)
+}
+
+func (ev *event) IsSerialized() bool {
+	_, has := ev.message.Values["_s"]
+	return has
 }
 
 type EventBroker interface {

@@ -168,7 +168,7 @@ func flush(engine *Engine, rFlusher *redisFlusher, updateSQLs map[string][]strin
 						}
 						bind, _ := orm.GetDirtyBind()
 						_, _, _ = loadByID(engine, lastID, entity, true, false)
-						updateCacheAfterUpdate(lazy, dbData, engine, entity, bind, schema, localCacheSets, localCacheDeletes, db, lastID,
+						updateCacheAfterUpdate(dbData, engine, entity, bind, schema, localCacheSets, localCacheDeletes, db, lastID,
 							rFlusher, dataLoaderSets)
 					}
 				} else {
@@ -243,7 +243,7 @@ func flush(engine *Engine, rFlusher *redisFlusher, updateSQLs map[string][]strin
 				}
 				updateSQLs[schema.mysqlPoolName] = append(updateSQLs[schema.mysqlPoolName], sql)
 			}
-			updateCacheAfterUpdate(lazy, dbData, engine, entity, bind, schema, localCacheSets, localCacheDeletes, db, currentID,
+			updateCacheAfterUpdate(dbData, engine, entity, bind, schema, localCacheSets, localCacheDeletes, db, currentID,
 				rFlusher, dataLoaderSets)
 		}
 	}
@@ -450,7 +450,7 @@ func flush(engine *Engine, rFlusher *redisFlusher, updateSQLs map[string][]strin
 	}
 }
 
-func updateCacheAfterUpdate(lazy bool, dbData []interface{}, engine *Engine, entity Entity, bind map[string]interface{},
+func updateCacheAfterUpdate(dbData []interface{}, engine *Engine, entity Entity, bind map[string]interface{},
 	schema *tableSchema, localCacheSets map[string]map[string][]interface{}, localCacheDeletes map[string]map[string]bool,
 	db *DB, currentID uint64, redisFlusher RedisFlusher, dataLoaderSets dataLoaderSets) {
 	old := make([]interface{}, len(dbData))
