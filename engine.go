@@ -343,19 +343,11 @@ func (e *Engine) FlushLazy(entity Entity) {
 }
 
 func (e *Engine) FlushMany(entities ...Entity) {
-	rFlusher := e.afterCommitRedisFlusher
-	if rFlusher == nil {
-		rFlusher = &redisFlusher{engine: e}
-	}
-	flush(e, rFlusher, nil, nil, true, false, false, entities...)
+	e.NewFlusher().Track(entities...).Flush()
 }
 
 func (e *Engine) FlushLazyMany(entities ...Entity) {
-	rFlusher := e.afterCommitRedisFlusher
-	if rFlusher == nil {
-		rFlusher = &redisFlusher{engine: e}
-	}
-	flush(e, rFlusher, nil, nil, true, true, false, entities...)
+	e.NewFlusher().Track(entities...).FlushLazy()
 }
 
 func (e *Engine) FlushWithCheck(entity Entity) error {
@@ -381,11 +373,7 @@ func (e *Engine) FlushWithCheckMany(entities ...Entity) error {
 				panic(asErr)
 			}
 		}()
-		rFlusher := e.afterCommitRedisFlusher
-		if rFlusher == nil {
-			rFlusher = &redisFlusher{engine: e}
-		}
-		flush(e, rFlusher, nil, nil, true, false, false, entities...)
+		e.NewFlusher().Track(entities...).Flush()
 	}()
 	return err
 }

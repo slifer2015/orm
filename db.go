@@ -2,7 +2,10 @@ package orm
 
 import (
 	"database/sql"
+	"regexp"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
 
 	log2 "github.com/apex/log"
 
@@ -260,7 +263,7 @@ func (db *DB) Exec(query string, args ...interface{}) ExecResult {
 		db.fillLogFields("[ORM][MYSQL][EXEC]", start, "exec", query, args, err)
 	}
 	if err != nil {
-		panic(convertToError(err))
+		panic(db.convertToError(err))
 	}
 	return &execResult{r: rows}
 }
@@ -325,4 +328,24 @@ func (db *DB) fillLogFields(message string, start time.Time, typeCode string, qu
 	} else {
 		e.Info(message)
 	}
+}
+
+func (db *DB) convertToError(err error) error {
+	sqlErr, yes := err.(*mysql.MySQLError)
+	if yes {
+		if sqlErr.Number == 1062 {
+			var abortLabelReg, _ = regexp.Compile(` for key '(.*?)'`)
+			labels := abortLabelReg.FindStringSubmatch(sqlErr.Message)
+			if len(labels) > 0 {
+				return &DuplicatedKeyError{Message: sqlErr.Message, Index: labels[1]}
+			}
+		} else if sqlErr.Number == 1451 || sqlErr.Number == 1452 {
+			var abortLabelReg, _ = regexp.Compile(" CONSTRAINT `(.*?)`")
+			labels := abortLabelReg.FindStringSubmatch(sqlErr.Message)
+			if len(labels) > 0 {
+				return &ForeignKeyError{Message: "foreign key error in key `" + labels[1] + "`", Constraint: labels[1]}
+			}
+		}
+	}
+	return err
 }
