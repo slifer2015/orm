@@ -630,7 +630,7 @@ func BenchmarkFlusher(b *testing.B) {
 	b.ReportAllocs()
 	flusher := engine.NewFlusher()
 	flusher.Track(reference)
-	//28 allocs/op
+	//22 allocs/op
 	for n := 0; n < b.N; n++ {
 		reference.Age = n + 1
 		flusher.Flush()

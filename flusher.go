@@ -393,14 +393,17 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			if !entity.Loaded() {
 				panic(fmt.Errorf("entity is not loaded and can't be updated: %v [%d]", entity.getORM().elem.Type().String(), currentID))
 			}
-			fields := make([]string, bindLength)
-			i := 0
-			for key, value := range updateBind {
-				fields[i] = "`" + key + "`=" + value
-				i++
-			}
 			/* #nosec */
-			sql := "UPDATE " + schema.GetTableName() + " SET " + strings.Join(fields, ",") + " WHERE `ID` = " + strconv.FormatUint(currentID, 10)
+			sql := "UPDATE " + schema.GetTableName() + " SET "
+			first := true
+			for key, value := range updateBind {
+				if !first {
+					sql += ","
+				}
+				first = false
+				sql += "`" + key + "`=" + value
+			}
+			sql += " WHERE `ID` = " + strconv.FormatUint(currentID, 10)
 			db := schema.GetMysql(f.engine)
 			if lazy {
 				f.fillLazyQuery(db.GetPoolCode(), sql, nil)
@@ -709,11 +712,13 @@ func (f *flusher) updateCacheAfterUpdate(dbData []interface{}, entity Entity, bi
 	}
 	f.fillRedisSearchFromBind(schema, bind, entity.GetID())
 	f.addDirtyQueues(bind, schema, currentID, "u")
-	f.addToLogQueue(schema, currentID, f.convertDBDataToMap(schema, old), bind, entity.getORM().logMeta)
+	if schema.hasLog {
+		f.addToLogQueue(schema, currentID, f.convertDBDataToMap(schema, old), bind, entity.getORM().logMeta)
+	}
 }
 
 func (f *flusher) addDirtyQueues(bind map[string]interface{}, schema *tableSchema, id uint64, action string) {
-	key := EventAsMap{"E": schema.t.String(), "I": id, "A": action}
+	var key EventAsMap
 	for column, tags := range schema.tags {
 		queues, has := tags["dirty"]
 		if !has {
@@ -727,14 +732,16 @@ func (f *flusher) addDirtyQueues(bind map[string]interface{}, schema *tableSchem
 			continue
 		}
 		queueNames := strings.Split(queues, ",")
+		if key == nil {
+			key = EventAsMap{"E": schema.t.String(), "I": id, "A": action}
+		}
 		for _, queueName := range queueNames {
 			f.getRedisFlusher().PublishMap(queueName, key)
 		}
 	}
 }
 
-func (f *flusher) addToLogQueue(tableSchema *tableSchema, id uint64,
-	before map[string]interface{}, changes map[string]interface{}, entityMeta map[string]interface{}) {
+func (f *flusher) addToLogQueue(tableSchema *tableSchema, id uint64, before Bind, changes Bind, entityMeta Bind) {
 	if !tableSchema.hasLog {
 		return
 	}
@@ -879,4 +886,5 @@ func (f *flusher) clear() {
 	f.lazyMap = nil
 	f.localCacheDeletes = nil
 	f.localCacheSets = nil
+	f.dataLoaderSets = nil
 }
