@@ -55,6 +55,8 @@ type flusher struct {
 	trackedEntitiesCounter int
 	mutex                  sync.Mutex
 	redisFlusher           *redisFlusher
+	updateSQLs             map[string][]string
+	deleteBinds            map[reflect.Type]map[uint64][]interface{}
 }
 
 func (f *flusher) Track(entity ...Entity) Flusher {
@@ -172,12 +174,14 @@ func (f *flusher) flushTrackedEntities(lazy bool, transaction bool) {
 			db.Rollback()
 		}
 	}()
-	f.flush(nil, nil, true, lazy, transaction, f.trackedEntities...)
+	f.flush(true, lazy, transaction, f.trackedEntities...)
 	if transaction {
 		for _, db := range dbPools {
 			db.Commit()
 		}
 	}
+	f.redisFlusher = nil
+	f.updateSQLs = nil
 }
 
 func (f *flusher) flushWithCheck(transaction bool) error {
@@ -215,8 +219,7 @@ func (f *flusher) flushWithLock(transaction bool, lockerPool string, lockName st
 	f.flushTrackedEntities(false, transaction)
 }
 
-func (f *flusher) flush(updateSQLs map[string][]string, deleteBinds map[reflect.Type]map[uint64][]interface{},
-	root bool, lazy bool, transaction bool, entities ...Entity) {
+func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Entity) {
 	insertKeys := make(map[reflect.Type][]string)
 	insertValues := make(map[reflect.Type]string)
 	insertArguments := make(map[reflect.Type][]interface{})
@@ -284,13 +287,13 @@ func (f *flusher) flush(updateSQLs map[string][]string, deleteBinds map[reflect.
 			orm.delete = true
 		}
 		if orm.delete {
-			if deleteBinds == nil {
-				deleteBinds = make(map[reflect.Type]map[uint64][]interface{})
+			if f.deleteBinds == nil {
+				f.deleteBinds = make(map[reflect.Type]map[uint64][]interface{})
 			}
-			if deleteBinds[t] == nil {
-				deleteBinds[t] = make(map[uint64][]interface{})
+			if f.deleteBinds[t] == nil {
+				f.deleteBinds[t] = make(map[uint64][]interface{})
 			}
-			deleteBinds[t][currentID] = dbData
+			f.deleteBinds[t][currentID] = dbData
 		} else if !orm.inDB {
 			onUpdate := entity.getORM().onDuplicateKeyUpdate
 			if onUpdate != nil {
@@ -413,10 +416,10 @@ func (f *flusher) flush(updateSQLs map[string][]string, deleteBinds map[reflect.
 			if lazy {
 				f.fillLazyQuery(lazyMap, db.GetPoolCode(), sql, nil)
 			} else {
-				if updateSQLs == nil {
-					updateSQLs = make(map[string][]string)
+				if f.updateSQLs == nil {
+					f.updateSQLs = make(map[string][]string)
 				}
-				updateSQLs[schema.mysqlPoolName] = append(updateSQLs[schema.mysqlPoolName], sql)
+				f.updateSQLs[schema.mysqlPoolName] = append(f.updateSQLs[schema.mysqlPoolName], sql)
 			}
 			f.updateCacheAfterUpdate(dbData, entity, bind, schema, localCacheSets, localCacheDeletes, db, currentID, dataLoaderSets)
 		}
@@ -432,7 +435,7 @@ func (f *flusher) flush(updateSQLs map[string][]string, deleteBinds map[reflect.
 			toFlush[i] = v
 			i++
 		}
-		f.flush(updateSQLs, deleteBinds, false, false, transaction, toFlush...)
+		f.flush(false, false, transaction, toFlush...)
 		rest := make([]Entity, 0)
 		for _, v := range entities {
 			_, has := referencesToFlash[v]
@@ -440,7 +443,7 @@ func (f *flusher) flush(updateSQLs map[string][]string, deleteBinds map[reflect.
 				rest = append(rest, v)
 			}
 		}
-		f.flush(updateSQLs, deleteBinds, true, false, transaction, rest...)
+		f.flush(true, false, transaction, rest...)
 		return
 	}
 	for typeOf, values := range insertKeys {
@@ -477,7 +480,7 @@ func (f *flusher) flush(updateSQLs map[string][]string, deleteBinds map[reflect.
 		}
 	}
 	if root {
-		for pool, queries := range updateSQLs {
+		for pool, queries := range f.updateSQLs {
 			db := f.engine.GetMysql(pool)
 			if len(queries) == 1 {
 				db.Exec(queries[0])
@@ -486,7 +489,7 @@ func (f *flusher) flush(updateSQLs map[string][]string, deleteBinds map[reflect.
 			_, def := db.Query(strings.Join(queries, ";") + ";")
 			def()
 		}
-		for typeOf, deleteBinds := range deleteBinds {
+		for typeOf, deleteBinds := range f.deleteBinds {
 			schema := getTableSchema(f.engine.registry, typeOf)
 			ids := make([]interface{}, len(deleteBinds))
 			i := 0
@@ -524,7 +527,7 @@ func (f *flusher) flush(updateSQLs map[string][]string, deleteBinds map[reflect.
 										toDeleteValue.markToDelete()
 										toDeleteAll[i] = toDeleteValue
 									}
-									f.flush(nil, nil, true, transaction, lazy, toDeleteAll...)
+									f.flush(true, transaction, lazy, toDeleteAll...)
 								}
 							}
 						}
