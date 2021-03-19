@@ -225,11 +225,9 @@ func (f *flusher) flushWithLock(transaction bool, lockerPool string, lockName st
 
 func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Entity) {
 	insertKeys := make(map[reflect.Type][]string)
-	insertValues := make(map[reflect.Type]string)
 	insertArguments := make(map[reflect.Type][]interface{})
 	insertBinds := make(map[reflect.Type][]map[string]interface{})
 	insertReflectValues := make(map[reflect.Type][]Entity)
-	totalInsert := make(map[reflect.Type]int)
 	isInTransaction := transaction
 
 	var referencesToFlash map[Entity]Entity
@@ -373,8 +371,6 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 				bindLength++
 			}
 
-			values := make([]interface{}, bindLength)
-			valuesKeys := make([]string, bindLength)
 			if insertKeys[t] == nil {
 				fields := make([]string, bindLength)
 				i := 0
@@ -384,22 +380,15 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 				}
 				insertKeys[t] = fields
 			}
-			for index, key := range insertKeys[t] {
-				value := bind[key]
-				values[index] = value
-				valuesKeys[index] = "?"
-			}
-			_, has := insertArguments[t]
+			_, has := insertBinds[t]
 			if !has {
-				insertArguments[t] = make([]interface{}, 0)
-				insertReflectValues[t] = make([]Entity, 0)
 				insertBinds[t] = make([]map[string]interface{}, 0)
-				insertValues[t] = "(" + strings.Join(valuesKeys, ",") + ")"
 			}
-			insertArguments[t] = append(insertArguments[t], values...)
+			for _, key := range insertKeys[t] {
+				insertArguments[t] = append(insertArguments[t], bind[key])
+			}
 			insertReflectValues[t] = append(insertReflectValues[t], entity)
 			insertBinds[t] = append(insertBinds[t], bind)
-			totalInsert[t]++
 		} else {
 			if !entity.Loaded() {
 				panic(fmt.Errorf("entity is not loaded and can't be updated: %v [%d]", entity.getORM().elem.Type().String(), currentID))
@@ -448,14 +437,38 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 	}
 	for typeOf, values := range insertKeys {
 		schema := getTableSchema(f.engine.registry, typeOf)
-		finalValues := make([]string, len(values))
-		for key, val := range values {
-			finalValues[key] = "`" + val + "`"
-		}
 		/* #nosec */
-		sql := "INSERT INTO " + schema.tableName + "(" + strings.Join(finalValues, ",") + ") VALUES " + insertValues[typeOf]
-		for i := 1; i < totalInsert[typeOf]; i++ {
-			sql += "," + insertValues[typeOf]
+		sql := "INSERT INTO " + schema.tableName
+		l := len(values)
+		if l > 0 {
+			sql += "("
+		}
+		first := true
+		for _, val := range values {
+			if !first {
+				sql += ","
+			}
+			first = false
+			sql += "`" + val + "`"
+		}
+		if l > 0 {
+			sql += ")"
+		}
+		sql += " VALUES "
+		bindPart := "("
+		if l > 0 {
+			bindPart += "?"
+		}
+		for i := 1; i < l; i++ {
+			bindPart += ",?"
+		}
+		bindPart += ")"
+		l = len(insertBinds[typeOf])
+		for i := 0; i < l; i++ {
+			if i > 0 {
+				sql += ","
+			}
+			sql += bindPart
 		}
 		id := uint64(0)
 		db := schema.GetMysql(f.engine)
