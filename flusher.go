@@ -57,6 +57,7 @@ type flusher struct {
 	redisFlusher           *redisFlusher
 	updateSQLs             map[string][]string
 	deleteBinds            map[reflect.Type]map[uint64][]interface{}
+	lazyMap                map[string]interface{}
 }
 
 func (f *flusher) Track(entity ...Entity) Flusher {
@@ -182,6 +183,7 @@ func (f *flusher) flushTrackedEntities(lazy bool, transaction bool) {
 	}
 	f.redisFlusher = nil
 	f.updateSQLs = nil
+	f.lazyMap = nil
 }
 
 func (f *flusher) flushWithCheck(transaction bool) error {
@@ -229,7 +231,6 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 	localCacheSets := make(map[string]map[string][]interface{})
 	dataLoaderSets := make(map[*tableSchema]map[uint64][]interface{})
 	localCacheDeletes := make(map[string]map[string]bool)
-	lazyMap := make(map[string]interface{})
 	isInTransaction := transaction
 
 	var referencesToFlash map[Entity]Entity
@@ -414,7 +415,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			sql := "UPDATE " + schema.GetTableName() + " SET " + strings.Join(fields, ",") + " WHERE `ID` = " + strconv.FormatUint(currentID, 10)
 			db := schema.GetMysql(f.engine)
 			if lazy {
-				f.fillLazyQuery(lazyMap, db.GetPoolCode(), sql, nil)
+				f.fillLazyQuery(db.GetPoolCode(), sql, nil)
 			} else {
 				if f.updateSQLs == nil {
 					f.updateSQLs = make(map[string][]string)
@@ -460,7 +461,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 		id := uint64(0)
 		db := schema.GetMysql(f.engine)
 		if lazy {
-			f.fillLazyQuery(lazyMap, db.GetPoolCode(), sql, insertArguments[typeOf])
+			f.fillLazyQuery(db.GetPoolCode(), sql, insertArguments[typeOf])
 		} else {
 			res := db.Exec(sql, insertArguments[typeOf]...)
 			id = res.LastInsertId()
@@ -501,7 +502,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			sql := "DELETE FROM `" + schema.tableName + "` WHERE " + NewWhere("`ID` IN ?", ids).String()
 			db := schema.GetMysql(f.engine)
 			if lazy {
-				f.fillLazyQuery(lazyMap, db.GetPoolCode(), sql, ids)
+				f.fillLazyQuery(db.GetPoolCode(), sql, ids)
 			} else {
 				usage := schema.GetUsage(f.engine.registry)
 				if len(usage) > 0 {
@@ -588,6 +589,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 		f.engine.GetLocalCache(cacheCode).Remove(keys...)
 	}
 	if lazy {
+		lazyMap := f.getLazyMap()
 		deletesRedisCache, has := lazyMap["cr"].(map[string][]string)
 		if !has {
 			deletesRedisCache = make(map[string][]string)
@@ -618,8 +620,8 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			}
 		}
 	}
-	if len(lazyMap) > 0 {
-		f.getRedisFlusher().Publish(lazyChannelName, lazyMap)
+	if len(f.lazyMap) > 0 {
+		f.getRedisFlusher().Publish(lazyChannelName, f.lazyMap)
 	}
 	if f.redisFlusher != nil && !isInTransaction && root {
 		f.redisFlusher.Flush()
@@ -666,6 +668,13 @@ func (f *flusher) getRedisFlusher() *redisFlusher {
 		}
 	}
 	return f.redisFlusher
+}
+
+func (f *flusher) getLazyMap() map[string]interface{} {
+	if f.lazyMap == nil {
+		f.lazyMap = make(map[string]interface{})
+	}
+	return f.lazyMap
 }
 
 func (f *flusher) updateCacheAfterUpdate(dbData []interface{}, entity Entity, bind map[string]interface{},
@@ -848,7 +857,8 @@ func (f *flusher) addLocalCacheDeletes(cacheDeletes map[string]map[string]bool, 
 	}
 }
 
-func (f *flusher) fillLazyQuery(lazyMap map[string]interface{}, dbCode string, sql string, values []interface{}) {
+func (f *flusher) fillLazyQuery(dbCode string, sql string, values []interface{}) {
+	lazyMap := f.getLazyMap()
 	updatesMap := lazyMap["q"]
 	if updatesMap == nil {
 		updatesMap = make([]interface{}, 0)

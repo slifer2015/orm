@@ -607,3 +607,32 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	assert.Equal(t, "1534", entitiesRefs[1].Name)
 	assert.Equal(t, "1634", entitiesRefs[2].Name)
 }
+
+func BenchmarkFlusher(b *testing.B) {
+	var entity *flushEntity
+	var reference *flushEntityReference
+	var referenceCascade *flushEntityReferenceCascade
+	registry := &Registry{}
+	registry.RegisterRedisStream("entity_changed", "default", []string{"test-group-1"})
+	registry.RegisterEnumSlice("orm.TestEnum", []string{"a", "b", "c"})
+	engine := PrepareTables(nil, registry, 5, entity, reference, referenceCascade)
+
+	schema := engine.registry.GetTableSchemaForEntity(reference).(*tableSchema)
+	schema.hasLocalCache = false
+	schema.localCacheName = ""
+	schema.hasRedisCache = false
+	schema.redisCacheName = ""
+
+	reference = &flushEntityReference{Name: "Tom"}
+	engine.Flush(reference)
+	engine.LoadByID(1, reference)
+	b.ResetTimer()
+	b.ReportAllocs()
+	flusher := engine.NewFlusher()
+	flusher.Track(reference)
+	//28 allocs/op
+	for n := 0; n < b.N; n++ {
+		reference.Age = n + 1
+		flusher.Flush()
+	}
+}
