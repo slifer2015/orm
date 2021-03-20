@@ -683,15 +683,18 @@ func (f *flusher) getLazyMap() map[string]interface{} {
 }
 
 func (f *flusher) updateCacheAfterUpdate(dbData []interface{}, entity Entity, bind Bind, schema *tableSchema, currentID uint64) {
-	old := make([]interface{}, len(dbData))
-	copy(old, dbData)
-	f.injectBind(entity, bind)
+	var old []interface{}
 	localCache, hasLocalCache := schema.GetLocalCache(f.engine)
+	redisCache, hasRedis := schema.GetRedisCache(f.engine)
+	if hasLocalCache || hasRedis || schema.hasLog {
+		old = make([]interface{}, len(dbData))
+		copy(old, dbData)
+	}
+	f.injectBind(entity, bind)
 	if !hasLocalCache && f.engine.hasRequestCache {
 		hasLocalCache = true
 		localCache = f.engine.GetLocalCache(requestCacheKey)
 	}
-	redisCache, hasRedis := schema.GetRedisCache(f.engine)
 	if hasLocalCache {
 		cacheKey := schema.getCacheKey(currentID)
 		f.addLocalCacheSet(localCache.code, cacheKey, buildLocalCacheValue(entity))

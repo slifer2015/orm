@@ -626,11 +626,11 @@ func BenchmarkFlusher(b *testing.B) {
 	reference = &flushEntityReference{Name: "Tom"}
 	engine.Flush(reference)
 	engine.LoadByID(1, reference)
-	b.ResetTimer()
-	b.ReportAllocs()
 	flusher := engine.NewFlusher()
 	flusher.Track(reference)
-	//22 allocs/op
+	b.ResetTimer()
+	b.ReportAllocs()
+	//21 allocs/op 6 for Exec
 	for n := 0; n < b.N; n++ {
 		reference.Age = n + 1
 		flusher.Flush()
