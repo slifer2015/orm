@@ -529,21 +529,6 @@ func (r *eventsConsumer) consume(ctx context.Context, count int, blocking bool, 
 								if err != nil {
 									panic(err)
 								}
-								var toAck map[string][]string
-								for _, row := range finalEvents {
-									e := row.(*event)
-									if !e.ack && !e.skip {
-										if toAck == nil {
-											toAck = make(map[string][]string)
-										} else if toAck[e.stream] == nil {
-											toAck[e.stream] = make([]string, 0)
-										}
-										toAck[e.stream] = append(toAck[e.stream], e.message.ID)
-									}
-								}
-								for stream, ids := range toAck {
-									r.redis.XAck(stream, r.group, ids...)
-								}
 								events = make([]Event, 0)
 								return
 							}
