@@ -32,7 +32,6 @@ type AsyncConsumer struct {
 	heartBeat         func()
 	heartBeatDuration time.Duration
 	logLogger         func(log *LogQueueValue)
-	errorHandler      func(err interface{})
 }
 
 func NewAsyncConsumer(engine *Engine, name string) *AsyncConsumer {
@@ -41,10 +40,6 @@ func NewAsyncConsumer(engine *Engine, name string) *AsyncConsumer {
 
 func (r *AsyncConsumer) DisableLoop() {
 	r.disableLoop = true
-}
-
-func (r *AsyncConsumer) RegisterErrorHandler(handler func(err interface{})) {
-	r.errorHandler = handler
 }
 
 func (r *AsyncConsumer) SetHeartBeat(duration time.Duration, beat func()) {
@@ -136,26 +131,17 @@ func (r *AsyncConsumer) handleQueries(engine *Engine, validMap map[string]interf
 		db := engine.GetMysql(code)
 		sql := validInsert[1].(string)
 		attributes := validInsert[2]
-		func() {
-			defer func() {
-				if rec := recover(); rec != nil {
-					if r.errorHandler != nil {
-						r.errorHandler(rec)
-					}
-				}
-			}()
-			var res ExecResult
-			if attributes == nil {
-				res = db.Exec(sql)
-			} else {
-				res = db.Exec(sql, attributes.([]interface{})...)
-			}
-			if sql[0:11] == "INSERT INTO" {
-				ids[i] = res.LastInsertId()
-			} else {
-				ids[i] = 0
-			}
-		}()
+		var res ExecResult
+		if attributes == nil {
+			res = db.Exec(sql)
+		} else {
+			res = db.Exec(sql, attributes.([]interface{})...)
+		}
+		if sql[0:11] == "INSERT INTO" {
+			ids[i] = res.LastInsertId()
+		} else {
+			ids[i] = 0
+		}
 	}
 	return ids
 }

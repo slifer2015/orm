@@ -45,6 +45,114 @@ func TestRedisStreamGroupConsumerClean(t *testing.T) {
 	assert.Equal(t, int64(0), engine.GetRedis().XLen("test-stream"))
 }
 
+func TestRedisStreamGroupConsumerErrorHandler(t *testing.T) {
+	registry := &Registry{}
+	registry.RegisterRedis("localhost:6381", 15)
+	registry.RegisterLocker("default", "default")
+	registry.RegisterRedisStream("test-stream", "default", []string{"test-group"})
+	validatedRegistry, err := registry.Validate()
+	assert.NoError(t, err)
+	engine := validatedRegistry.CreateEngine()
+	engine.GetRedis().FlushDB()
+	broker := engine.GetEventBroker()
+
+	consumer := broker.Consumer("test-consumer", "test-group")
+	consumer.(*eventsConsumer).block = time.Millisecond
+	consumer.(*eventsConsumer).garbageTick = time.Millisecond * 15
+	consumer.DisableLoop()
+
+	eventFlusher := engine.GetEventBroker().NewFlusher()
+	for i := 1; i <= 10; i++ {
+		eventFlusher.PublishMap("test-stream", EventAsMap{"name": fmt.Sprintf("a%d", i)})
+	}
+	eventFlusher.Flush()
+	assert.PanicsWithError(t, "test err a1", func() {
+		consumer.Consume(context.Background(), 1, true, func(events []Event) {
+			panic(fmt.Errorf("test err %v", events[0].RawData()["name"]))
+		})
+	})
+	assert.Equal(t, int64(10), engine.GetRedis().XLen("test-stream"))
+	assert.Equal(t, int64(1), engine.GetRedis().XInfoGroups("test-stream")[0].Pending)
+	i := 0
+	consumer.Consume(context.Background(), 1, true, func(events []Event) {
+		i++
+		assert.Equal(t, fmt.Sprintf("a%d", i), events[0].RawData()["name"])
+		events[0].Skip()
+	})
+	assert.Equal(t, 10, i)
+	assert.Equal(t, int64(10), engine.GetRedis().XLen("test-stream"))
+	assert.Equal(t, int64(10), engine.GetRedis().XInfoGroups("test-stream")[0].Pending)
+
+	j := 0
+	consumer.SetErrorHandler(func(err interface{}, events []Event) error {
+		j++
+		return nil
+	})
+	i = 0
+	consumer.Consume(context.Background(), 1, true, func(events []Event) {
+		i++
+		panic(fmt.Errorf("test err %v", events[0].RawData()["name"]))
+	})
+	time.Sleep(time.Millisecond * 20)
+	consumer.(*eventsConsumer).garbageCollector(engine, true)
+	assert.Equal(t, 10, i)
+	assert.Equal(t, 10, j)
+	assert.Equal(t, int64(0), engine.GetRedis().XLen("test-stream"))
+	assert.Equal(t, int64(0), engine.GetRedis().XInfoGroups("test-stream")[0].Pending)
+
+	eventFlusher = engine.GetEventBroker().NewFlusher()
+	for i := 1; i <= 10; i++ {
+		eventFlusher.PublishMap("test-stream", EventAsMap{"name": fmt.Sprintf("a%d", i)})
+	}
+	eventFlusher.Flush()
+
+	j = 0
+	consumer.SetErrorHandler(func(err interface{}, events []Event) error {
+		j++
+		assert.Len(t, events, 6)
+		assert.Equal(t, "a1", events[0].RawData()["name"])
+		assert.Equal(t, "a2", events[1].RawData()["name"])
+		assert.Equal(t, "a3", events[2].RawData()["name"])
+		assert.Equal(t, "a5", events[3].RawData()["name"])
+		assert.Equal(t, "a6", events[4].RawData()["name"])
+		assert.Equal(t, "a7", events[5].RawData()["name"])
+		return nil
+	})
+	i = 0
+	consumer.Consume(context.Background(), 10, true, func(events []Event) {
+		i++
+		for k, e := range events {
+			if k == 3 {
+				e.Ack()
+			}
+			if k >= 7 {
+				e.Skip()
+			}
+		}
+		panic(fmt.Errorf("test err %v", events[0].RawData()["name"]))
+	})
+	assert.Equal(t, 1, i)
+	assert.Equal(t, 1, j)
+	time.Sleep(time.Millisecond * 20)
+	consumer.(*eventsConsumer).garbageCollector(engine, true)
+	assert.Equal(t, int64(3), engine.GetRedis().XLen("test-stream"))
+	assert.Equal(t, int64(3), engine.GetRedis().XInfoGroups("test-stream")[0].Pending)
+
+	j = 0
+	consumer.SetErrorHandler(func(err interface{}, events []Event) error {
+		j++
+		return fmt.Errorf("strange error: %v", err)
+	})
+	assert.PanicsWithError(t, "strange error: test err a8", func() {
+		consumer.Consume(context.Background(), 1, true, func(events []Event) {
+			panic(fmt.Errorf("test err %v", events[0].RawData()["name"]))
+		})
+	})
+	assert.Equal(t, 1, j)
+	assert.Equal(t, int64(3), engine.GetRedis().XLen("test-stream"))
+	assert.Equal(t, int64(3), engine.GetRedis().XInfoGroups("test-stream")[0].Pending)
+}
+
 func TestRedisStreamGroupConsumerAutoScaled(t *testing.T) {
 	registry := &Registry{}
 	registry.RegisterRedis("localhost:6381", 15)

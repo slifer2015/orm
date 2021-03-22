@@ -182,11 +182,13 @@ func getRedisForStream(engine *Engine, stream string) *RedisCache {
 }
 
 type EventConsumerHandler func([]Event)
+type ConsumerErrorHandler func(err interface{}, events []Event) error
 
 type EventsConsumer interface {
 	Consume(ctx context.Context, count int, blocking bool, handler EventConsumerHandler)
 	DisableLoop()
 	SetHeartBeat(duration time.Duration, beat func())
+	SetErrorHandler(handler ConsumerErrorHandler)
 }
 
 type speedHandler struct {
@@ -267,6 +269,7 @@ type eventsConsumer struct {
 	block                  time.Duration
 	heartBeatTime          time.Time
 	heartBeat              func()
+	errorHandler           ConsumerErrorHandler
 	heartBeatDuration      time.Duration
 	lockTTL                time.Duration
 	lockTick               time.Duration
@@ -285,6 +288,10 @@ func (r *eventsConsumer) DisableLoop() {
 func (r *eventsConsumer) SetHeartBeat(duration time.Duration, beat func()) {
 	r.heartBeat = beat
 	r.heartBeatDuration = duration
+}
+
+func (r *eventsConsumer) SetErrorHandler(handler ConsumerErrorHandler) {
+	r.errorHandler = handler
 }
 
 func (r *eventsConsumer) HeartBeat(force bool) {
@@ -329,10 +336,12 @@ func (r *eventsConsumer) consume(ctx context.Context, count int, blocking bool, 
 	}
 	ticker := time.NewTicker(r.lockTick)
 	done := make(chan bool)
+
 	defer func() {
 		lock.Release()
 		ticker.Stop()
 		close(done)
+		r.deadConsumers = 0
 	}()
 	hasLock := true
 	canceled := false
@@ -505,7 +514,44 @@ func (r *eventsConsumer) consume(ctx context.Context, count int, blocking bool, 
 				r.consumedMutex.Unlock()
 				r.speedLogger.Clear()
 				start := time.Now()
-				handler(events)
+				func() {
+					defer func() {
+						if rec := recover(); rec != nil {
+							if r.errorHandler != nil {
+								finalEvents := make([]Event, 0)
+								for _, row := range events {
+									e := row.(*event)
+									if !e.ack && !e.skip {
+										finalEvents = append(finalEvents, row)
+									}
+								}
+								err := r.errorHandler(rec, finalEvents)
+								if err != nil {
+									panic(err)
+								}
+								var toAck map[string][]string
+								for _, row := range finalEvents {
+									e := row.(*event)
+									if !e.ack && !e.skip {
+										if toAck == nil {
+											toAck = make(map[string][]string)
+										} else if toAck[e.stream] == nil {
+											toAck[e.stream] = make([]string, 0)
+										}
+										toAck[e.stream] = append(toAck[e.stream], e.message.ID)
+									}
+								}
+								for stream, ids := range toAck {
+									r.redis.XAck(stream, r.group, ids...)
+								}
+								events = make([]Event, 0)
+								return
+							}
+							panic(rec)
+						}
+					}()
+					handler(events)
+				}()
 				r.speedTimeMicroseconds += time.Since(start).Microseconds()
 				r.speedDBQueries += r.speedLogger.DBQueries
 				r.speedRedisQueries += r.speedLogger.RedisQueries
