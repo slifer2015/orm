@@ -182,7 +182,7 @@ func getRedisForStream(engine *Engine, stream string) *RedisCache {
 }
 
 type EventConsumerHandler func([]Event)
-type ConsumerErrorHandler func(err interface{}, events []Event) error
+type ConsumerErrorHandler func(err interface{}, event Event) error
 
 type EventsConsumer interface {
 	Consume(ctx context.Context, count int, blocking bool, handler EventConsumerHandler)
@@ -525,9 +525,18 @@ func (r *eventsConsumer) consume(ctx context.Context, count int, blocking bool, 
 										finalEvents = append(finalEvents, row)
 									}
 								}
-								err := r.errorHandler(rec, finalEvents)
-								if err != nil {
-									panic(err)
+								for _, e := range finalEvents {
+									func() {
+										defer func() {
+											if rec := recover(); rec != nil {
+												err := r.errorHandler(rec, e)
+												if err != nil {
+													panic(err)
+												}
+											}
+										}()
+										handler([]Event{e})
+									}()
 								}
 								events = make([]Event, 0)
 								return
