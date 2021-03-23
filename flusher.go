@@ -224,7 +224,7 @@ func (f *flusher) flushWithLock(transaction bool, lockerPool string, lockName st
 }
 
 func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Entity) {
-	insertKeys := make(map[reflect.Type][]string)
+	var insertKeys map[reflect.Type][]string
 	insertArguments := make(map[reflect.Type][]interface{})
 	insertBinds := make(map[reflect.Type][]map[string]interface{})
 	insertReflectValues := make(map[reflect.Type][]Entity)
@@ -370,7 +370,9 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 				bind["ID"] = currentID
 				bindLength++
 			}
-
+			if insertKeys == nil {
+				insertKeys = make(map[reflect.Type][]string)
+			}
 			if insertKeys[t] == nil {
 				fields := make([]string, bindLength)
 				i := 0

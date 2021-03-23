@@ -86,6 +86,13 @@ type flushEntityReferenceCascade struct {
 	ReferenceTwo *flushEntity `orm:"cascade"`
 }
 
+type flushEntityBenchmark struct {
+	ORM  `orm:"localCache;redisCache"`
+	ID   uint
+	Name string
+	Age  int
+}
+
 func TestFlushLocalRedis(t *testing.T) {
 	testFlush(t, true, true)
 }
@@ -608,31 +615,37 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	assert.Equal(t, "1634", entitiesRefs[2].Name)
 }
 
-func BenchmarkFlusher(b *testing.B) {
-	var entity *flushEntity
-	var reference *flushEntityReference
-	var referenceCascade *flushEntityReferenceCascade
+//21 allocs/op - 6 for Exec
+func BenchmarkFlusherUpdateNoCache(b *testing.B) {
+	benchmarkFlusher(b, false, false)
+}
+
+func benchmarkFlusher(b *testing.B, useLocaCache, useRedisCache bool) {
+	var entity *flushEntityBenchmark
 	registry := &Registry{}
 	registry.RegisterRedisStream("entity_changed", "default", []string{"test-group-1"})
 	registry.RegisterEnumSlice("orm.TestEnum", []string{"a", "b", "c"})
-	engine := PrepareTables(nil, registry, 5, entity, reference, referenceCascade)
+	engine := PrepareTables(nil, registry, 5, entity)
 
-	schema := engine.registry.GetTableSchemaForEntity(reference).(*tableSchema)
-	schema.hasLocalCache = false
-	schema.localCacheName = ""
-	schema.hasRedisCache = false
-	schema.redisCacheName = ""
+	schema := engine.registry.GetTableSchemaForEntity(entity).(*tableSchema)
+	if !useLocaCache {
+		schema.hasLocalCache = false
+		schema.localCacheName = ""
+	}
+	if !useRedisCache {
+		schema.hasRedisCache = false
+		schema.redisCacheName = ""
+	}
 
-	reference = &flushEntityReference{Name: "Tom"}
-	engine.Flush(reference)
-	engine.LoadByID(1, reference)
+	entity = &flushEntityBenchmark{Name: "Tom"}
+	engine.Flush(entity)
+	engine.LoadByID(1, entity)
 	flusher := engine.NewFlusher()
-	flusher.Track(reference)
+	flusher.Track(entity)
 	b.ResetTimer()
 	b.ReportAllocs()
-	//21 allocs/op 6 for Exec
 	for n := 0; n < b.N; n++ {
-		reference.Age = n + 1
+		entity.Age = n + 1
 		flusher.Flush()
 	}
 }

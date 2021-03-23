@@ -351,6 +351,7 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 	oldData []interface{}, prefix string) {
 	var hasOld = orm.inDB
 	hasUpdate := updateBind != nil
+	// TODO remove t.Field(i), use cached
 	for i := 0; i < t.NumField(); i++ {
 		fieldType := t.Field(i)
 		name := prefix + fieldType.Name
