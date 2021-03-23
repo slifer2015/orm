@@ -114,7 +114,7 @@ func (orm *ORM) getDirtyBind() (bind Bind, updateBind map[string]string, has boo
 	if orm.inDB && !orm.delete {
 		updateBind = make(map[string]string)
 	}
-	orm.fillBind(id, bind, updateBind, orm.tableSchema, t, orm.elem, orm.dBData, "")
+	orm.fillBind(id, bind, updateBind, orm.tableSchema, orm.tableSchema.fields, t, orm.elem, orm.dBData, "")
 	has = id == 0 || len(bind) > 0
 	return bind, updateBind, has
 }
@@ -346,19 +346,97 @@ func (orm *ORM) SetField(field string, value interface{}) error {
 	return nil
 }
 
-func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tableSchema *tableSchema,
+func (orm *ORM) prepareFieldBind(prefix string, schema *tableSchema, fields *tableFields, value reflect.Value,
+	oldData []interface{}, index int) (reflect.Value, string, interface{}) {
+	name := prefix + fields.fields[index].Name
+	field := value.Field(index)
+	if orm.inDB {
+		return field, name, oldData[schema.columnMapping[name]]
+	}
+	return field, name, nil
+}
+
+func (orm *ORM) checkNil(field reflect.Value, name string, hasOld bool, old interface{}, bind Bind, updateBind map[string]string) bool {
+	isNil := field.IsZero()
+	if isNil {
+		if hasOld && old == nil {
+			return false
+		}
+		bind[name] = nil
+		if updateBind != nil {
+			updateBind[name] = "NULL"
+		}
+		return false
+	}
+	return true
+}
+
+func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tableSchema *tableSchema, fields *tableFields,
 	t reflect.Type, value reflect.Value,
 	oldData []interface{}, prefix string) {
 	var hasOld = orm.inDB
+	var old interface{}
 	hasUpdate := updateBind != nil
 	// TODO remove t.Field(i), use cached
+	for _, i := range fields.uintegers {
+		if i == 1 && prefix == "" {
+			continue
+		}
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		val := field.Uint()
+		if hasOld && old == val {
+			continue
+		}
+		bind[name] = val
+		if hasUpdate {
+			updateBind[name] = strconv.FormatUint(val, 10)
+		}
+	}
+	for _, i := range fields.uintegersNullable {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		if !orm.checkNil(field, name, hasOld, old, bind, updateBind) {
+			continue
+		}
+		val := field.Elem().Uint()
+		if hasOld && old == val {
+			continue
+		}
+		bind[name] = val
+		if hasUpdate {
+			updateBind[name] = strconv.FormatUint(val, 10)
+		}
+	}
+	for _, i := range fields.integers {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		val := field.Int()
+		if hasOld && old == val {
+			continue
+		}
+		bind[name] = val
+		if hasUpdate {
+			updateBind[name] = strconv.FormatInt(val, 10)
+		}
+	}
+	for _, i := range fields.integersNullable {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		if !orm.checkNil(field, name, hasOld, old, bind, updateBind) {
+			continue
+		}
+		val := field.Elem().Int()
+		if hasOld && old == val {
+			continue
+		}
+		bind[name] = val
+		if hasUpdate {
+			updateBind[name] = strconv.FormatInt(val, 10)
+		}
+	}
 	for i := 0; i < t.NumField(); i++ {
 		fieldType := t.Field(i)
 		name := prefix + fieldType.Name
 		if prefix == "" && i <= 1 {
 			continue
 		}
-		var old interface{}
 		if hasOld {
 			old = oldData[tableSchema.columnMapping[name]]
 		}
@@ -373,92 +451,13 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 		isRequired := hasRequired && required == "true"
 		switch fieldTypeString {
 		case "uint", "uint8", "uint16", "uint32", "uint64":
-			val := field.Uint()
-			if attributes["year"] == "true" {
-				if hasOld && old == val {
-					continue
-				}
-				bind[name] = val
-				continue
-			}
-			if hasOld && old == val {
-				continue
-			}
-			bind[name] = val
-			if hasUpdate {
-				updateBind[name] = strconv.FormatUint(val, 10)
-			}
+			continue
 		case "*uint", "*uint8", "*uint16", "*uint32", "*uint64":
-			if attributes["year"] == "true" {
-				isNil := field.IsZero()
-				if isNil {
-					if hasOld && old == nil {
-						continue
-					}
-					bind[name] = nil
-					if hasUpdate {
-						updateBind[name] = "NULL"
-					}
-					continue
-				}
-				val := field.Elem().Uint()
-				if hasOld && old == val {
-					continue
-				}
-				bind[name] = val
-				if hasUpdate {
-					updateBind[name] = strconv.FormatUint(val, 10)
-				}
-				continue
-			}
-			isNil := field.IsZero()
-			if isNil {
-				if hasOld && old == nil {
-					continue
-				}
-				bind[name] = nil
-				if hasUpdate {
-					updateBind[name] = "NULL"
-				}
-				continue
-			}
-			val := field.Elem().Uint()
-			if hasOld && old == val {
-				continue
-			}
-			bind[name] = val
-			if hasUpdate {
-				updateBind[name] = strconv.FormatUint(val, 10)
-			}
+			continue
 		case "int", "int8", "int16", "int32", "int64":
-			val := field.Int()
-			if hasOld && old == val {
-				continue
-			}
-			bind[name] = val
-			if hasUpdate {
-				updateBind[name] = strconv.FormatInt(val, 10)
-			}
+			continue
 		case "*int", "*int8", "*int16", "*int32", "*int64":
-			isNil := field.IsZero()
-			if isNil {
-				if hasOld && old == nil {
-					continue
-				}
-				bind[name] = nil
-				if hasUpdate {
-					updateBind[name] = "NULL"
-				}
-				continue
-			}
-			val := field.Elem().Int()
-			if hasOld && old == val {
-				continue
-			}
-			bind[name] = val
-			if hasUpdate {
-				updateBind[name] = strconv.FormatInt(val, 10)
-			}
+			continue
 		case "string":
 			value := field.String()
 			if hasOld && (old == value || (old == nil && value == "")) {
@@ -721,7 +720,7 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 		default:
 			k := field.Kind().String()
 			if k == "struct" {
-				orm.fillBind(0, bind, updateBind, tableSchema, field.Type(), reflect.ValueOf(field.Interface()), oldData, fieldType.Name)
+				orm.fillBind(0, bind, updateBind, tableSchema, fields.structs[i], field.Type(), reflect.ValueOf(field.Interface()), oldData, fieldType.Name)
 				continue
 			} else if k == "ptr" {
 				value := uint64(0)

@@ -93,7 +93,6 @@ type tableSchema struct {
 	cachedIndexesAll     map[string]*cachedQueryDefinition
 	columnNames          []string
 	columnMapping        map[string]int
-	columnMappingRec     map[int]string
 	uniqueIndices        map[string][]string
 	uniqueIndicesGlobal  map[string][]string
 	refOne               []string
@@ -533,10 +532,8 @@ func initTableSchema(registry *Registry, entityType reflect.Type) (*tableSchema,
 	}
 	columns := fields.getColumnNames()
 	columnMapping := make(map[string]int)
-	columnMappingRec := make(map[int]string)
 	for i, name := range columns {
 		columnMapping[name] = i
-		columnMappingRec[i] = name
 	}
 	fieldsQuery := ""
 	for _, column := range columns {
@@ -558,7 +555,6 @@ func initTableSchema(registry *Registry, entityType reflect.Type) (*tableSchema,
 		tags:                 tags,
 		columnNames:          columns,
 		columnMapping:        columnMapping,
-		columnMappingRec:     columnMappingRec,
 		cachedIndexes:        cachedQueries,
 		cachedIndexesOne:     cachedQueriesOne,
 		cachedIndexesAll:     cachedQueriesAll,
