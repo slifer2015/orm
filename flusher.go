@@ -604,7 +604,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			deletesRedisCache = make(map[string][]string)
 			lazyMap["cr"] = deletesRedisCache
 		}
-		for cacheCode, commands := range f.redisFlusher.pipelines {
+		for cacheCode, commands := range f.getRedisFlusher().pipelines {
 			if commands.deletes != nil {
 				deletesRedisCache[cacheCode] = commands.deletes
 			}
