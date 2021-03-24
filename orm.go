@@ -610,6 +610,62 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 			}
 		}
 	}
+	for _, i := range fields.times {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		value := field.Interface().(time.Time)
+		layout := "2006-01-02"
+		var valueAsString string
+		if tableSchema.tags[name]["time"] == "true" {
+			if value.Year() == 1 {
+				valueAsString = "0001-01-01 00:00:00"
+			} else {
+				layout += " 15:04:05"
+			}
+		} else if value.Year() == 1 {
+			valueAsString = "0001-01-01"
+		}
+		if valueAsString == "" {
+			valueAsString = value.Format(layout)
+		}
+		if hasOld && old == valueAsString {
+			continue
+		}
+		bind[name] = valueAsString
+		if hasUpdate {
+			updateBind[name] = "'" + valueAsString + "'"
+		}
+	}
+	for _, i := range fields.timesNullable {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		if !orm.checkNil(field, name, hasOld, old, bind, updateBind) {
+			continue
+		}
+		value := field.Interface().(*time.Time)
+		layout := "2006-01-02"
+		var valueAsString string
+		if tableSchema.tags[name]["time"] == "true" {
+			if value != nil {
+				layout += " 15:04:05"
+			}
+		}
+		if value != nil {
+			valueAsString = value.Format(layout)
+		}
+		if hasOld && (old == valueAsString || (valueAsString == "" && (old == nil || old == "nil"))) {
+			continue
+		}
+		if valueAsString == "" {
+			bind[name] = nil
+			if hasUpdate {
+				updateBind[name] = "NULL"
+			}
+		} else {
+			bind[name] = valueAsString
+			if hasUpdate {
+				updateBind[name] = "'" + valueAsString + "'"
+			}
+		}
+	}
 
 	for i := 0; i < t.NumField(); i++ {
 		fieldType := t.Field(i)
@@ -653,55 +709,9 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 		case "*orm.CachedQuery":
 			continue
 		case "time.Time":
-			value := field.Interface().(time.Time)
-			layout := "2006-01-02"
-			var valueAsString string
-			if tableSchema.tags[name]["time"] == "true" {
-				if value.Year() == 1 {
-					valueAsString = "0001-01-01 00:00:00"
-				} else {
-					layout += " 15:04:05"
-				}
-			} else if value.Year() == 1 {
-				valueAsString = "0001-01-01"
-			}
-			if valueAsString == "" {
-				valueAsString = value.Format(layout)
-			}
-			if hasOld && old == valueAsString {
-				continue
-			}
-			bind[name] = valueAsString
-			if hasUpdate {
-				updateBind[name] = "'" + valueAsString + "'"
-			}
 			continue
 		case "*time.Time":
-			value := field.Interface().(*time.Time)
-			layout := "2006-01-02"
-			var valueAsString string
-			if tableSchema.tags[name]["time"] == "true" {
-				if value != nil {
-					layout += " 15:04:05"
-				}
-			}
-			if value != nil {
-				valueAsString = value.Format(layout)
-			}
-			if hasOld && (old == valueAsString || (valueAsString == "" && (old == nil || old == "nil"))) {
-				continue
-			}
-			if valueAsString == "" {
-				bind[name] = nil
-				if hasUpdate {
-					updateBind[name] = "NULL"
-				}
-			} else {
-				bind[name] = valueAsString
-				if hasUpdate {
-					updateBind[name] = "'" + valueAsString + "'"
-				}
-			}
+			continue
 		case "[]string":
 			value := field.Interface().([]string)
 			var valueAsString string
