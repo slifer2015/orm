@@ -697,6 +697,31 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 			}
 		}
 	}
+	for i, subFields := range fields.structs {
+		field, _, _ := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		orm.fillBind(0, bind, updateBind, tableSchema, subFields, field.Type(), reflect.ValueOf(field.Interface()), oldData, fields.fields[i].Name)
+	}
+	for _, i := range fields.refs {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		value := uint64(0)
+		if !field.IsNil() {
+			value = field.Elem().Field(1).Uint()
+		}
+		if hasOld && (old == value || ((old == nil || old == 0) && value == 0)) {
+			continue
+		}
+		if value == 0 {
+			bind[name] = nil
+			if hasUpdate {
+				updateBind[name] = "NULL"
+			}
+		} else {
+			bind[name] = value
+			if hasUpdate {
+				updateBind[name] = strconv.FormatUint(value, 10)
+			}
+		}
+	}
 
 	for i := 0; i < t.NumField(); i++ {
 		fieldType := t.Field(i)
@@ -748,27 +773,8 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 		default:
 			k := field.Kind().String()
 			if k == "struct" {
-				orm.fillBind(0, bind, updateBind, tableSchema, fields.structs[i], field.Type(), reflect.ValueOf(field.Interface()), oldData, fieldType.Name)
 				continue
 			} else if k == "ptr" {
-				value := uint64(0)
-				if !field.IsNil() {
-					value = field.Elem().Field(1).Uint()
-				}
-				if hasOld && (old == value || ((old == nil || old == 0) && value == 0)) {
-					continue
-				}
-				if value == 0 {
-					bind[name] = nil
-					if hasUpdate {
-						updateBind[name] = "NULL"
-					}
-				} else {
-					bind[name] = value
-					if hasUpdate {
-						updateBind[name] = strconv.FormatUint(value, 10)
-					}
-				}
 				continue
 			} else {
 				value := field.Interface()
