@@ -666,6 +666,37 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 			}
 		}
 	}
+	for _, i := range fields.sliceStrings {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		value := field.Interface().([]string)
+		var valueAsString string
+		if value != nil {
+			valueAsString = strings.Join(value, ",")
+		}
+		if hasOld && (old == valueAsString || (valueAsString == "" && old == nil)) {
+			continue
+		}
+		if valueAsString != "" {
+			bind[name] = valueAsString
+			if hasUpdate {
+				updateBind[name] = orm.escapeSQLParam(valueAsString)
+			}
+		} else {
+			attributes := tableSchema.tags[name]
+			required, hasRequired := attributes["required"]
+			if hasRequired && required == "true" {
+				bind[name] = ""
+				if hasUpdate {
+					updateBind[name] = "''"
+				}
+			} else {
+				bind[name] = nil
+				if hasUpdate {
+					updateBind[name] = "NULL"
+				}
+			}
+		}
+	}
 
 	for i := 0; i < t.NumField(); i++ {
 		fieldType := t.Field(i)
@@ -713,25 +744,7 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 		case "*time.Time":
 			continue
 		case "[]string":
-			value := field.Interface().([]string)
-			var valueAsString string
-			if value != nil {
-				valueAsString = strings.Join(value, ",")
-			}
-			if hasOld && (old == valueAsString || (valueAsString == "" && old == nil)) {
-				continue
-			}
-			if isRequired || valueAsString != "" {
-				bind[name] = valueAsString
-				if hasUpdate {
-					updateBind[name] = orm.escapeSQLParam(valueAsString)
-				}
-			} else if valueAsString == "" {
-				bind[name] = nil
-				if hasUpdate {
-					updateBind[name] = "NULL"
-				}
-			}
+			continue
 		default:
 			k := field.Kind().String()
 			if k == "struct" {
