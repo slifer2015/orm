@@ -15,7 +15,7 @@ import (
 )
 
 const countPending = 100
-const maxConsumers = 100
+const maxConsumers = 10
 const pendingClaimCheckDuration = time.Minute * 2
 const speedHSetKey = "_orm_ss"
 

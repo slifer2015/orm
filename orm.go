@@ -523,6 +523,93 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 			}
 		}
 	}
+	for _, i := range fields.floats {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		val := field.Float()
+		precision := 16
+		fieldAttributes := tableSchema.tags[name]
+		precisionAttribute, has := fieldAttributes["precision"]
+		if has {
+			userPrecision, _ := strconv.Atoi(precisionAttribute)
+			precision = userPrecision
+		}
+		attributes := tableSchema.tags[name]
+		decimal, has := attributes["decimal"]
+		if has {
+			decimalArgs := strings.Split(decimal, ",")
+			size, _ := strconv.ParseFloat(decimalArgs[1], 64)
+			sizeNumber := math.Pow(10, size)
+			val = math.Round(val*sizeNumber) / sizeNumber
+			if hasOld {
+				valOld := math.Round(old.(float64)*sizeNumber) / sizeNumber
+				if val == valOld {
+					continue
+				}
+			}
+		} else {
+			sizeNumber := math.Pow(10, float64(precision))
+			val = math.Round(val*sizeNumber) / sizeNumber
+			if hasOld {
+				valOld := math.Round(old.(float64)*sizeNumber) / sizeNumber
+				if valOld == val {
+					continue
+				}
+			}
+		}
+		bind[name] = val
+		if hasUpdate {
+			updateBind[name] = strconv.FormatFloat(val, 'f', -1, 64)
+		}
+	}
+	for _, i := range fields.floatsNullable {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		if !orm.checkNil(field, name, hasOld, old, bind, updateBind) {
+			continue
+		}
+		var val float64
+		isZero := field.IsZero()
+		if !isZero {
+			val = field.Elem().Float()
+		}
+		precision := 10
+		fieldAttributes := tableSchema.tags[name]
+		precisionAttribute, has := fieldAttributes["precision"]
+		if has {
+			userPrecision, _ := strconv.Atoi(precisionAttribute)
+			precision = userPrecision
+		}
+		attributes := tableSchema.tags[name]
+		decimal, has := attributes["decimal"]
+		if has {
+			decimalArgs := strings.Split(decimal, ",")
+			size, _ := strconv.ParseFloat(decimalArgs[1], 64)
+			sizeNumber := math.Pow(10, size)
+			val = math.Round(val*sizeNumber) / sizeNumber
+			if hasOld && old != nil {
+				valOld := math.Round(old.(float64)*sizeNumber) / sizeNumber
+				if val == valOld {
+					continue
+				}
+			}
+			bind[name] = val
+			if hasUpdate {
+				updateBind[name] = strconv.FormatFloat(val, 'f', -1, 64)
+			}
+		} else {
+			sizeNumber := math.Pow(10, float64(precision))
+			val = math.Round(val*sizeNumber) / sizeNumber
+			if hasOld && old != nil {
+				valOld := math.Round(old.(float64)*sizeNumber) / sizeNumber
+				if valOld == val {
+					continue
+				}
+			}
+			bind[name] = val
+			if hasUpdate {
+				updateBind[name] = strconv.FormatFloat(val, 'f', -1, 64)
+			}
+		}
+	}
 
 	for i := 0; i < t.NumField(); i++ {
 		fieldType := t.Field(i)
@@ -560,109 +647,9 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 		case "*bool":
 			continue
 		case "float32", "float64":
-			val := field.Float()
-			precision := 8
-			if field.Type().String() == "float64" {
-				precision = 16
-			}
-			fieldAttributes := tableSchema.tags[name]
-			precisionAttribute, has := fieldAttributes["precision"]
-			if has {
-				userPrecision, _ := strconv.Atoi(precisionAttribute)
-				precision = userPrecision
-			}
-			decimal, has := attributes["decimal"]
-			if has {
-				decimalArgs := strings.Split(decimal, ",")
-				size, _ := strconv.ParseFloat(decimalArgs[1], 64)
-				sizeNumber := math.Pow(10, size)
-				val = math.Round(val*sizeNumber) / sizeNumber
-				if hasOld {
-					valOld := math.Round(old.(float64)*sizeNumber) / sizeNumber
-					if val == valOld {
-						continue
-					}
-				}
-			} else {
-				sizeNumber := math.Pow(10, float64(precision))
-				val = math.Round(val*sizeNumber) / sizeNumber
-				if hasOld {
-					valOld := math.Round(old.(float64)*sizeNumber) / sizeNumber
-					if valOld == val {
-						continue
-					}
-				}
-			}
-			bind[name] = val
-			if hasUpdate {
-				updateBind[name] = strconv.FormatFloat(val, 'f', -1, 64)
-			}
+			continue
 		case "*float32", "*float64":
-			var val float64
-			isZero := field.IsZero()
-			if !isZero {
-				val = field.Elem().Float()
-			}
-			precision := 5
-			if field.Type().String() == "*float64" {
-				precision = 10
-			}
-			fieldAttributes := tableSchema.tags[name]
-			precisionAttribute, has := fieldAttributes["precision"]
-			if has {
-				userPrecision, _ := strconv.Atoi(precisionAttribute)
-				precision = userPrecision
-			}
-			decimal, has := attributes["decimal"]
-			if has {
-				if isZero {
-					if hasOld && old == nil {
-						continue
-					}
-					bind[name] = nil
-					if hasUpdate {
-						updateBind[name] = "NULL"
-					}
-					continue
-				}
-				decimalArgs := strings.Split(decimal, ",")
-				size, _ := strconv.ParseFloat(decimalArgs[1], 64)
-				sizeNumber := math.Pow(10, size)
-				val = math.Round(val*sizeNumber) / sizeNumber
-				if hasOld && old != nil {
-					valOld := math.Round(old.(float64)*sizeNumber) / sizeNumber
-					if val == valOld {
-						continue
-					}
-				}
-				bind[name] = val
-				if hasUpdate {
-					updateBind[name] = strconv.FormatFloat(val, 'f', -1, 64)
-				}
-			} else {
-				if isZero {
-					if hasOld && old == nil {
-						continue
-					}
-					bind[name] = nil
-					if hasUpdate {
-						updateBind[name] = "NULL"
-					}
-					continue
-				}
-				sizeNumber := math.Pow(10, float64(precision))
-				val = math.Round(val*sizeNumber) / sizeNumber
-				if hasOld && old != nil {
-					valOld := math.Round(old.(float64)*sizeNumber) / sizeNumber
-					if valOld == val {
-						continue
-					}
-				}
-				bind[name] = val
-				if hasUpdate {
-					updateBind[name] = strconv.FormatFloat(val, 'f', -1, 64)
-				}
-			}
+			continue
 		case "*orm.CachedQuery":
 			continue
 		case "time.Time":
