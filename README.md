@@ -1190,10 +1190,10 @@ func main() {
  flusher.Flush()
  
  // reading from "stream-1" and "stream-2" streams, you can run max one consumer at once
- consumerTestGroup1 := engine.GetEventBroker().Consume("my-consumer", "test-group-1", 1)
+ consumerTestGroup1 := engine.GetEventBroker().Consumer("my-consumer", "test-group-1", 1)
  
  // reading max 100 events in one loop, this line stop execution, waiting for new events
- consumerTestGroup1.Consume(context.Background(), 100, func(events []orm.Event) {
+ consumerTestGroup1.Consumer(context.Background(), 100, func(events []orm.Event) {
  	for _, event := range events {
             values := event.RawData() // map[string]interface{}{"key": "value", "anotherKey": "value 2"}
             //do some work
@@ -1202,13 +1202,13 @@ func main() {
  })
 
  // auto acknowledging
- consumerTestGroup1.Consume(context.Background(), 100, func(events []orm.Event) { 
+ consumerTestGroup1.Consumer(context.Background(), 100, func(events []orm.Event) { 
  	//do some work, for example put all events at once to DB
  	// in this example all events will be acknowledge when this method is finished 
  })
 
  // skipping some events
- consumerTestGroup1.Consume(context.Background(), 100, func(events []orm.Event) {
+ consumerTestGroup1.Consumer(context.Background(), 100, func(events []orm.Event) {
   for _, event := range events {
         if someCondition {
              event.Ack()
@@ -1219,10 +1219,10 @@ func main() {
  })
 
  // reading from "stream-3" stream, you can run max to two consumers at once
- consumerTestGroup3 := engine.GetEventBroker().Consume("my-consumer", "test-group-2", 2)
+ consumerTestGroup3 := engine.GetEventBroker().Consumer("my-consumer", "test-group-2", 2)
  consumerTestGroup3.DisableLoop() // all events will be consumed once withour waiting for new events   
 
- consumerTestGroup3.Consume(context.Background(), 100, func(events []orm.Event) {
+ consumerTestGroup3.Consumer(context.Background(), 100, func(events []orm.Event) {
     var person Person
  	for _, event := range events {
         err := event.Unserialize(&person)
@@ -1236,6 +1236,19 @@ func main() {
 
 }    
 ```
+
+You can register special function that will handle panics:
+```go
+ consumer := broker.Consumer("test-consumer", "test-group")
+ consumer.SetErrorHandler(func(err interface{}, event Event) error {
+   // log error somewhere
+   // optionally you can remove this event from stream
+   event.Ack()
+   return nil // do not panic, error is handled above, you can return err if you want consumer to stop with panic
+ })
+
+```
+
 
 Setting another redis pool for AsyncConsumer:
 ```yaml
