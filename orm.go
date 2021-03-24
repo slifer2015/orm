@@ -108,13 +108,12 @@ func (orm *ORM) getDirtyBind() (bind Bind, updateBind map[string]string, has boo
 		}
 	}
 	id := orm.GetID()
-	t := orm.elem.Type()
 	orm.initDBData()
 	bind = make(Bind)
 	if orm.inDB && !orm.delete {
 		updateBind = make(map[string]string)
 	}
-	orm.fillBind(id, bind, updateBind, orm.tableSchema, orm.tableSchema.fields, t, orm.elem, orm.dBData, "")
+	orm.fillBind(id, bind, updateBind, orm.tableSchema, orm.tableSchema.fields, orm.elem, orm.dBData, "")
 	has = id == 0 || len(bind) > 0
 	return bind, updateBind, has
 }
@@ -371,13 +370,10 @@ func (orm *ORM) checkNil(field reflect.Value, name string, hasOld bool, old inte
 	return true
 }
 
-func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tableSchema *tableSchema, fields *tableFields,
-	t reflect.Type, value reflect.Value,
-	oldData []interface{}, prefix string) {
+func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tableSchema *tableSchema,
+	fields *tableFields, value reflect.Value, oldData []interface{}, prefix string) {
 	var hasOld = orm.inDB
-	var old interface{}
 	hasUpdate := updateBind != nil
-	// TODO remove t.Field(i), use cached
 	for _, i := range fields.uintegers {
 		if i == 1 && prefix == "" {
 			continue
@@ -699,7 +695,7 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 	}
 	for i, subFields := range fields.structs {
 		field, _, _ := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
-		orm.fillBind(0, bind, updateBind, tableSchema, subFields, field.Type(), reflect.ValueOf(field.Interface()), oldData, fields.fields[i].Name)
+		orm.fillBind(0, bind, updateBind, tableSchema, subFields, reflect.ValueOf(field.Interface()), oldData, fields.fields[i].Name)
 	}
 	for _, i := range fields.refs {
 		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
@@ -722,120 +718,77 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 			}
 		}
 	}
-
-	for i := 0; i < t.NumField(); i++ {
-		fieldType := t.Field(i)
-		name := prefix + fieldType.Name
-		if prefix == "" && i <= 1 {
+	for _, i := range fields.refsMany {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		if !orm.checkNil(field, name, hasOld, old, bind, updateBind) {
 			continue
 		}
-		if hasOld {
-			old = oldData[tableSchema.columnMapping[name]]
+		var valString string
+		length := field.Len()
+		if length > 0 {
+			ids := make([]uint64, length)
+			for i := 0; i < length; i++ {
+				ids[i] = field.Index(i).Interface().(Entity).GetID()
+			}
+			encoded, _ := jsoniter.ConfigFastest.Marshal(ids)
+			valString = string(encoded)
 		}
-		field := value.Field(i)
-		attributes := tableSchema.tags[name]
-		_, has := attributes["ignore"]
-		if has {
+		if hasOld && (old == valString || ((old == nil || old == "0") && valString == "")) {
 			continue
 		}
-		fieldTypeString := field.Type().String()
-		required, hasRequired := attributes["required"]
-		isRequired := hasRequired && required == "true"
-		switch fieldTypeString {
-		case "uint", "uint8", "uint16", "uint32", "uint64":
-			continue
-		case "*uint", "*uint8", "*uint16", "*uint32", "*uint64":
-			continue
-		case "int", "int8", "int16", "int32", "int64":
-			continue
-		case "*int", "*int8", "*int16", "*int32", "*int64":
-			continue
-		case "string":
-			continue
-		case "[]uint8":
-			continue
-		case "bool":
-			continue
-		case "*bool":
-			continue
-		case "float32", "float64":
-			continue
-		case "*float32", "*float64":
-			continue
-		case "*orm.CachedQuery":
-			continue
-		case "time.Time":
-			continue
-		case "*time.Time":
-			continue
-		case "[]string":
-			continue
-		default:
-			k := field.Kind().String()
-			if k == "struct" {
-				continue
-			} else if k == "ptr" {
-				continue
-			} else {
-				value := field.Interface()
-				var valString string
-				if !field.IsZero() {
-					if fieldTypeString[0:3] == "[]*" {
-						length := field.Len()
-						if length > 0 {
-							ids := make([]uint64, length)
-							for i := 0; i < length; i++ {
-								ids[i] = field.Index(i).Interface().(Entity).GetID()
-							}
-							encoded, _ := jsoniter.ConfigFastest.Marshal(ids)
-							valString = string(encoded)
-						}
-						if hasOld && (old == valString || ((old == nil || old == "0") && valString == "")) {
-							continue
-						}
-						if valString == "" {
-							bind[name] = nil
-							if hasUpdate {
-								updateBind[name] = "NULL"
-							}
-						} else {
-							bind[name] = valString
-							if hasUpdate {
-								updateBind[name] = "'" + valString + "'"
-							}
-						}
-						continue
-					} else {
-						var encoded []byte
-						if hasOld && old != nil && old != "" {
-							oldMap := reflect.New(field.Type()).Interface()
-							newMap := reflect.New(field.Type()).Interface()
-							_ = jsoniter.ConfigFastest.Unmarshal([]byte(old.(string)), oldMap)
-							oldValue := reflect.ValueOf(oldMap).Elem().Interface()
-							encoded, _ = jsoniter.ConfigFastest.Marshal(value)
-							_ = jsoniter.ConfigFastest.Unmarshal(encoded, newMap)
-							newValue := reflect.ValueOf(newMap).Elem().Interface()
-							if cmp.Equal(newValue, oldValue) {
-								continue
-							}
-						} else {
-							encoded, _ = jsoniter.ConfigFastest.Marshal(value)
-						}
-						valString = string(encoded)
-					}
-				} else if hasOld && old == nil {
+		if valString == "" {
+			bind[name] = nil
+			if hasUpdate {
+				updateBind[name] = "NULL"
+			}
+		} else {
+			bind[name] = valString
+			if hasUpdate {
+				updateBind[name] = "'" + valString + "'"
+			}
+		}
+	}
+	for _, i := range fields.jsons {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		value := field.Interface()
+		var valString string
+		if !field.IsZero() {
+			var encoded []byte
+			if hasOld && old != nil && old != "" {
+				oldMap := reflect.New(field.Type()).Interface()
+				newMap := reflect.New(field.Type()).Interface()
+				_ = jsoniter.ConfigFastest.Unmarshal([]byte(old.(string)), oldMap)
+				oldValue := reflect.ValueOf(oldMap).Elem().Interface()
+				encoded, _ = jsoniter.ConfigFastest.Marshal(value)
+				_ = jsoniter.ConfigFastest.Unmarshal(encoded, newMap)
+				newValue := reflect.ValueOf(newMap).Elem().Interface()
+				if cmp.Equal(newValue, oldValue) {
 					continue
 				}
-				if isRequired || valString != "" {
-					bind[name] = valString
-					if hasUpdate {
-						updateBind[name] = "'" + valString + "'"
-					}
-				} else if valString == "" {
-					bind[name] = nil
-					if hasUpdate {
-						updateBind[name] = "NULL"
-					}
+			} else {
+				encoded, _ = jsoniter.ConfigFastest.Marshal(value)
+			}
+			valString = string(encoded)
+		} else if hasOld && old == nil {
+			continue
+		}
+		if valString != "" {
+			bind[name] = valString
+			if hasUpdate {
+				updateBind[name] = "'" + valString + "'"
+			}
+		} else {
+			attributes := tableSchema.tags[name]
+			required, hasRequired := attributes["required"]
+			if hasRequired && required == "true" {
+				bind[name] = ""
+				if hasUpdate {
+					updateBind[name] = "''"
+				}
+			} else {
+				bind[name] = nil
+				if hasUpdate {
+					updateBind[name] = "NULL"
 				}
 			}
 		}
