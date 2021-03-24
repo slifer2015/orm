@@ -65,7 +65,7 @@ func TestRedisStreamsStatus(t *testing.T) {
 	assert.Equal(t, uint64(10001), stats[0].Groups[0].Consumers[0].Pending)
 	assert.Equal(t, int64(10001), stats[0].Groups[0].SpeedEvents)
 	assert.GreaterOrEqual(t, stats[0].Groups[0].SpeedMilliseconds, 0.01)
-	assert.LessOrEqual(t, stats[0].Groups[0].SpeedMilliseconds, 0.011)
+	assert.LessOrEqual(t, stats[0].Groups[0].SpeedMilliseconds, 0.012)
 	assert.GreaterOrEqual(t, stats[0].Groups[0].RedisQueriesPerEvent, 0.00019)
 	assert.LessOrEqual(t, stats[0].Groups[0].RedisQueriesPerEvent, 0.00021)
 	assert.GreaterOrEqual(t, stats[0].Groups[0].RedisQueriesMillisecondsPerEvent, 0.00001)

@@ -458,6 +458,72 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 			}
 		}
 	}
+	for _, i := range fields.bytes {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		value := field.Bytes()
+		valueAsString := string(value)
+		if hasOld && ((old == nil && valueAsString == "") || (old != nil && old.(string) == valueAsString)) {
+			continue
+		}
+		if valueAsString == "" {
+			bind[name] = nil
+			if hasUpdate {
+				updateBind[name] = "NULL"
+			}
+		} else {
+			bind[name] = valueAsString
+			if hasUpdate {
+				updateBind[name] = orm.escapeSQLParam(valueAsString)
+			}
+		}
+	}
+	if fields.fakeDelete > 0 {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, fields.fakeDelete)
+		value := uint64(0)
+		if field.Bool() {
+			value = id
+		}
+		if !hasOld || old != value {
+			bind[name] = value
+			if hasUpdate {
+				updateBind[name] = strconv.FormatUint(value, 10)
+			}
+		}
+	}
+	for _, i := range fields.booleans {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		value := field.Bool()
+		if hasOld && old == value {
+			continue
+		}
+		bind[name] = value
+		if hasUpdate {
+			if value {
+				updateBind[name] = "1"
+			} else {
+				updateBind[name] = "0"
+			}
+		}
+	}
+	for _, i := range fields.booleansNullable {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		if !orm.checkNil(field, name, hasOld, old, bind, updateBind) {
+			continue
+		}
+		value := field.Elem().Bool()
+		if hasOld && old == value {
+			continue
+		}
+		bind[name] = value
+		if hasUpdate {
+			if value {
+				updateBind[name] = "1"
+			} else {
+				updateBind[name] = "0"
+			}
+		}
+	}
+
 	for i := 0; i < t.NumField(); i++ {
 		fieldType := t.Field(i)
 		name := prefix + fieldType.Name
@@ -488,72 +554,11 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 		case "string":
 			continue
 		case "[]uint8":
-			value := field.Bytes()
-			valueAsString := string(value)
-			if hasOld && ((old != nil && old.(string) == valueAsString) || (old == nil && valueAsString == "")) {
-				continue
-			}
-			if valueAsString == "" {
-				bind[name] = nil
-				if hasUpdate {
-					updateBind[name] = "NULL"
-				}
-			} else {
-				bind[name] = valueAsString
-				if hasUpdate {
-					updateBind[name] = orm.escapeSQLParam(valueAsString)
-				}
-			}
+			continue
 		case "bool":
-			if name == "FakeDelete" {
-				value := uint64(0)
-				if field.Bool() {
-					value = id
-				}
-				if hasOld && old == value {
-					continue
-				}
-				bind[name] = value
-				if hasUpdate {
-					updateBind[name] = strconv.FormatUint(value, 10)
-				}
-				continue
-			}
-			value := field.Bool()
-			if hasOld && old == value {
-				continue
-			}
-			bind[name] = value
-			if hasUpdate {
-				if value {
-					updateBind[name] = "1"
-				} else {
-					updateBind[name] = "0"
-				}
-			}
+			continue
 		case "*bool":
-			if field.IsZero() {
-				if hasOld && old == nil {
-					continue
-				}
-				bind[name] = nil
-				if hasUpdate {
-					updateBind[name] = "NULL"
-				}
-				continue
-			}
-			value := field.Elem().Bool()
-			if hasOld && old == value {
-				continue
-			}
-			bind[name] = value
-			if hasUpdate {
-				if value {
-					updateBind[name] = "1"
-				} else {
-					updateBind[name] = "0"
-				}
-			}
+			continue
 		case "float32", "float64":
 			val := field.Float()
 			precision := 8
