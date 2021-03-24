@@ -431,6 +431,33 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 			updateBind[name] = strconv.FormatInt(val, 10)
 		}
 	}
+	for _, i := range fields.strings {
+		field, name, old := orm.prepareFieldBind(prefix, tableSchema, fields, value, oldData, i)
+		value := field.String()
+		if hasOld && (old == value || (old == nil && value == "")) {
+			continue
+		}
+		if value != "" {
+			bind[name] = value
+			if hasUpdate {
+				updateBind[name] = orm.escapeSQLParam(value)
+			}
+		} else {
+			attributes := tableSchema.tags[name]
+			required, hasRequired := attributes["required"]
+			if hasRequired && required == "true" {
+				bind[name] = ""
+				if hasUpdate {
+					updateBind[name] = "''"
+				}
+			} else {
+				bind[name] = nil
+				if hasUpdate {
+					updateBind[name] = "NULL"
+				}
+			}
+		}
+	}
 	for i := 0; i < t.NumField(); i++ {
 		fieldType := t.Field(i)
 		name := prefix + fieldType.Name
@@ -459,21 +486,7 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 		case "*int", "*int8", "*int16", "*int32", "*int64":
 			continue
 		case "string":
-			value := field.String()
-			if hasOld && (old == value || (old == nil && value == "")) {
-				continue
-			}
-			if isRequired || value != "" {
-				bind[name] = value
-				if hasUpdate {
-					updateBind[name] = orm.escapeSQLParam(value)
-				}
-			} else if value == "" {
-				bind[name] = nil
-				if hasUpdate {
-					updateBind[name] = "NULL"
-				}
-			}
+			continue
 		case "[]uint8":
 			value := field.Bytes()
 			valueAsString := string(value)
