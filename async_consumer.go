@@ -31,6 +31,7 @@ type AsyncConsumer struct {
 	disableLoop       bool
 	heartBeat         func()
 	heartBeatDuration time.Duration
+	errorHandler      ConsumerErrorHandler
 	logLogger         func(log *LogQueueValue)
 }
 
@@ -40,6 +41,10 @@ func NewAsyncConsumer(engine *Engine, name string) *AsyncConsumer {
 
 func (r *AsyncConsumer) DisableLoop() {
 	r.disableLoop = true
+}
+
+func (r *AsyncConsumer) SetErrorHandler(handler ConsumerErrorHandler) {
+	r.errorHandler = handler
 }
 
 func (r *AsyncConsumer) SetHeartBeat(duration time.Duration, beat func()) {
@@ -53,6 +58,7 @@ func (r *AsyncConsumer) SetLogLogger(logger func(log *LogQueueValue)) {
 
 func (r *AsyncConsumer) Digest(ctx context.Context, count int) {
 	consumer := r.engine.GetEventBroker().Consumer(r.name, asyncConsumerGroupName)
+	consumer.SetErrorHandler(r.errorHandler)
 	consumer.(*eventsConsumer).block = r.block
 	if r.disableLoop {
 		consumer.DisableLoop()
