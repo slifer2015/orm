@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -71,19 +72,24 @@ func (r *AsyncConsumer) Digest(ctx context.Context, count int) {
 			if event.Stream() == lazyChannelName {
 				r.handleLazy(event)
 			} else {
-				r.handleLog(event)
+				r.handleLogEvent(event)
 			}
 		}
 	})
 }
 
-func (r *AsyncConsumer) handleLog(event Event) {
+func (r *AsyncConsumer) handleLogEvent(event Event) {
 	var value LogQueueValue
 	err := event.Unserialize(&value)
 	if err != nil {
 		event.Ack()
 		return
 	}
+	r.handleLog(&value)
+	event.Ack()
+}
+
+func (r *AsyncConsumer) handleLog(value *LogQueueValue) {
 	poolDB := r.engine.GetMysql(value.PoolName)
 	/* #nosec */
 	query := "INSERT INTO `" + value.TableName + "`(`entity_id`, `added_at`, `meta`, `before`, `changes`) VALUES(?, ?, ?, ?, ?)"
@@ -105,10 +111,9 @@ func (r *AsyncConsumer) handleLog(event Event) {
 		res := poolDB.Exec(query, value.ID, value.Updated.Format("2006-01-02 15:04:05"), meta, before, changes)
 		if r.logLogger != nil {
 			value.LogID = res.LastInsertId()
-			r.logLogger(&value)
+			r.logLogger(value)
 			poolDB.Commit()
 		}
-		event.Ack()
 	}()
 }
 
@@ -144,9 +149,38 @@ func (r *AsyncConsumer) handleQueries(engine *Engine, validMap map[string]interf
 			res = db.Exec(sql, attributes.([]interface{})...)
 		}
 		if sql[0:11] == "INSERT INTO" {
+			id := res.LastInsertId()
 			ids[i] = res.LastInsertId()
+			logEvents, has := validMap["l"]
+			if has {
+				for _, row := range logEvents.([]interface{}) {
+					row.(map[string]interface{})["ID"] = id
+					id += db.autoincrement
+				}
+			}
 		} else {
 			ids[i] = 0
+		}
+	}
+	logEvents, has := validMap["l"]
+	if has {
+		for _, row := range logEvents.([]interface{}) {
+			logEvent := &LogQueueValue{}
+			asMap := row.(map[string]interface{})
+			logEvent.ID, _ = strconv.ParseUint(fmt.Sprintf("%v", asMap["ID"]), 10, 64)
+			logEvent.PoolName = asMap["PoolName"].(string)
+			logEvent.TableName = asMap["TableName"].(string)
+			logEvent.Updated = time.Now()
+			if asMap["Meta"] != nil {
+				logEvent.Meta = asMap["Meta"].(map[string]interface{})
+			}
+			if asMap["Before"] != nil {
+				logEvent.Before = asMap["Before"].(map[string]interface{})
+			}
+			if asMap["Changes"] != nil {
+				logEvent.Changes = asMap["Changes"].(map[string]interface{})
+			}
+			r.handleLog(logEvent)
 		}
 	}
 	return ids

@@ -123,4 +123,29 @@ func TestLogReceiver(t *testing.T) {
 	assert.False(t, changesNullable.Valid)
 	assert.Equal(t, "{\"Name\": \"John2\", \"Country\": \"Germany\", \"LastName\": \"Summer\"}", before.String)
 	assert.Equal(t, "{\"user_id\": 12}", meta.String)
+
+	e3 := &logReceiverEntity1{Name: "Adam", LastName: "Pol", Country: "Brazil"}
+	engine.FlushLazy(e3)
+	receiver := NewAsyncConsumer(engine, "default-consumer")
+	receiver.DisableLoop()
+	receiver.block = time.Millisecond
+	receiver.Digest(context.Background(), 100)
+	where1 = NewWhere("SELECT `entity_id`, `meta`, `before`, `changes` FROM `_log_default_logReceiverEntity1` WHERE `ID` = 5")
+	engine.GetMysql().QueryRow(where1, &entityID, &meta, &before, &changes)
+	assert.Equal(t, 3, entityID)
+	assert.False(t, before.Valid)
+	assert.Equal(t, "{\"Name\": \"Adam\", \"Country\": \"Brazil\", \"LastName\": \"Pol\"}", changes)
+	assert.Equal(t, "{\"user_id\": 12}", meta.String)
+
+	engine.LoadByID(3, e3)
+	e3.Name = "Eva"
+	engine.FlushLazy(e3)
+	receiver.Digest(context.Background(), 100)
+	where1 = NewWhere("SELECT `entity_id`, `meta`, `before`, `changes` FROM `_log_default_logReceiverEntity1` WHERE `ID` = 6")
+	engine.GetMysql().QueryRow(where1, &entityID, &meta, &before, &changes)
+	assert.Equal(t, 3, entityID)
+	assert.True(t, before.Valid)
+	assert.Equal(t, "{\"Name\": \"Eva\"}", changes)
+	assert.Equal(t, "{\"Name\": \"Adam\", \"Country\": \"Brazil\", \"LastName\": \"Pol\"}", before.String)
+	assert.Equal(t, "{\"user_id\": 12}", meta.String)
 }
