@@ -56,7 +56,7 @@ type flusher struct {
 	mutex                  sync.Mutex
 	redisFlusher           *redisFlusher
 	updateSQLs             map[string][]string
-	deleteBinds            map[reflect.Type]map[uint64][]interface{}
+	deleteBinds            map[reflect.Type]map[uint64]Entity
 	lazyMap                map[string]interface{}
 	localCacheDeletes      map[string][]string
 	localCacheSets         map[string][]interface{}
@@ -286,12 +286,12 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 		}
 		if orm.delete {
 			if f.deleteBinds == nil {
-				f.deleteBinds = make(map[reflect.Type]map[uint64][]interface{})
+				f.deleteBinds = make(map[reflect.Type]map[uint64]Entity)
 			}
 			if f.deleteBinds[t] == nil {
-				f.deleteBinds[t] = make(map[uint64][]interface{})
+				f.deleteBinds[t] = make(map[uint64]Entity)
 			}
-			f.deleteBinds[t][currentID] = dbData
+			f.deleteBinds[t][currentID] = entity
 		} else if !orm.inDB {
 			onUpdate := entity.getORM().onDuplicateKeyUpdate
 			if onUpdate != nil {
@@ -521,16 +521,28 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 		for typeOf, deleteBinds := range f.deleteBinds {
 			schema := getTableSchema(f.engine.registry, typeOf)
 			ids := make([]interface{}, len(deleteBinds))
+			var logEvents []*LogQueueValue
 			i := 0
-			for id := range deleteBinds {
+			for id, entity := range deleteBinds {
 				ids[i] = id
 				i++
+				if lazy {
+					orm := entity.getORM()
+					logEvent := f.addToLogQueue(schema, id, f.convertDBDataToMap(schema, orm.dBData), nil, orm.logMeta, lazy)
+					if logEvent != nil {
+						logEvents = append(logEvents, logEvent)
+					}
+				}
 			}
 			/* #nosec */
 			sql := "DELETE FROM `" + schema.tableName + "` WHERE " + NewWhere("`ID` IN ?", ids).String()
 			db := schema.GetMysql(f.engine)
 			if lazy {
-				f.fillLazyQuery(db.GetPoolCode(), sql, ids)
+				if len(logEvents) > 0 {
+					f.fillLazyQuery(db.GetPoolCode(), sql, ids, logEvents...)
+				} else {
+					f.fillLazyQuery(db.GetPoolCode(), sql, ids)
+				}
 			} else {
 				usage := schema.GetUsage(f.engine.registry)
 				if len(usage) > 0 {
@@ -571,10 +583,13 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 				hasLocalCache = true
 				localCache = f.engine.GetLocalCache(requestCacheKey)
 			}
-			for id, dbData := range deleteBinds {
+			for id, entity := range deleteBinds {
+				dbData := entity.getORM().dBData
 				bind := f.convertDBDataToMap(schema, dbData)
 				f.addDirtyQueues(bind, schema, id, "d")
-				f.addToLogQueue(schema, id, bind, nil, nil, lazy)
+				if !lazy {
+					f.addToLogQueue(schema, id, bind, nil, entity.getORM().logMeta, lazy)
+				}
 				if hasLocalCache {
 					f.addLocalCacheSet(localCache.code, schema.getCacheKey(id), "nil")
 					keys := f.getCacheQueriesKeys(schema, bind, dbData, true)
