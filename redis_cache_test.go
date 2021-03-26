@@ -105,6 +105,25 @@ func testRedis(t *testing.T, engine *Engine) {
 	assert.Equal(t, map[string]interface{}{"age": "16", "missing": nil, "name": "Tom"}, r.HMget("test_map",
 		"name", "age", "missing"))
 
+	r.HDel("test_map", "age")
+	assert.Equal(t, map[string]string{"last": "Summer", "name": "Tom"}, r.HGetAll("test_map"))
+	assert.Equal(t, int64(2), r.HLen("test_map"))
+
+	val = r.HIncrBy("test_inc", "a", 2)
+	assert.Equal(t, int64(2), val)
+	val = r.HIncrBy("test_inc", "a", 3)
+	assert.Equal(t, int64(5), val)
+
+	val = r.IncrBy("test_inc_2", 2)
+	assert.Equal(t, int64(2), val)
+	val = r.Incr("test_inc_2")
+	assert.Equal(t, int64(3), val)
+
+	assert.True(t, r.Expire("test_map", time.Second*1))
+	assert.Equal(t, int64(1), r.Exists("test_map"))
+	time.Sleep(time.Second)
+	assert.Equal(t, int64(0), r.Exists("test_map"))
+
 	added := r.ZAdd("test_z", &redis.Z{Member: "a", Score: 10}, &redis.Z{Member: "b", Score: 20})
 	assert.Equal(t, int64(2), added)
 	assert.Equal(t, []string{"b", "a"}, r.ZRevRange("test_z", 0, 3))
@@ -249,4 +268,15 @@ func testRedis(t *testing.T, engine *Engine) {
 	assert.Len(t, streams, 2)
 	assert.Len(t, streams[0].Messages, 1)
 	assert.Len(t, streams[1].Messages, 1)
+
+	script := `
+		local count = 2	
+		return count + KEYS[1] + ARGV[1]
+	`
+	val = r.Eval(script, []string{"3"}, 7)
+	assert.Equal(t, int64(12), val)
+	val = r.ScriptLoad(script)
+	assert.Equal(t, "618358a5df682faed583025e34f07905c2a96823", val)
+	val = r.EvalSha(val.(string), []string{"3"}, 8)
+	assert.Equal(t, int64(13), val)
 }
