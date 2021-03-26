@@ -560,8 +560,6 @@ func (r *eventsConsumer) consume(ctx context.Context, count int, blocking bool, 
 					} else if !ev.skip {
 						if toAck == nil {
 							toAck = make(map[string][]string)
-						} else if toAck[ev.stream] == nil {
-							toAck[ev.stream] = make([]string, 0)
 						}
 						toAck[ev.stream] = append(toAck[ev.stream], ev.message.ID)
 						totalACK++

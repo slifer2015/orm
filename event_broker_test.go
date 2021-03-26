@@ -467,4 +467,36 @@ func TestRedisStreamGroupConsumer(t *testing.T) {
 		}
 	})
 	assert.True(t, valid)
+
+	type testStructEvent struct {
+		Name string
+		Age  int
+	}
+
+	eventFlusher := engine.GetEventBroker().NewFlusher()
+	eventFlusher.Publish("test-stream", testStructEvent{Name: "a", Age: 18})
+	eventFlusher.Publish("test-stream", testStructEvent{Name: "b", Age: 20})
+	eventFlusher.Flush()
+	valid = false
+	consumer = broker.Consumer("test-consumer-unique", "test-group")
+	consumer.DisableLoop()
+	consumer.(*eventsConsumer).block = time.Millisecond * 10
+	consumer.Consume(context.Background(), 10, true, func(events []Event) {
+		valid = true
+		assert.Len(t, events, 2)
+		for i, event := range events {
+			data := &testStructEvent{}
+			assert.True(t, event.IsSerialized())
+			err := event.Unserialize(data)
+			assert.NoError(t, err)
+			if i == 0 {
+				assert.Equal(t, "a", data.Name)
+				assert.Equal(t, 18, data.Age)
+			} else {
+				assert.Equal(t, "b", data.Name)
+				assert.Equal(t, 20, data.Age)
+			}
+		}
+	})
+	assert.True(t, valid)
 }
