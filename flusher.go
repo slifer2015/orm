@@ -785,6 +785,9 @@ func (f *flusher) addDirtyQueues(bind map[string]interface{}, schema *tableSchem
 			}
 		}
 	}
+	if key == nil {
+		return nil
+	}
 	return &dirtyQueueValue{Event: key, Streams: allStreams}
 }
 
