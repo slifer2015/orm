@@ -1283,9 +1283,9 @@ func main() {
 }
 ```
 
-### Redis search index Alters
+### Redis search index alters
 
-Every time you run your code be sure you are checking if redis indices are valid:
+Every time you run your code be sure you are checking if redis search indices are valid:
 
 ```go
 altersSearch := engine.GetRedisSearchIndexAlters()
@@ -1297,7 +1297,7 @@ for _, alter := range altersSearch {
 
 ### Entity redis search
 
-It's very easy to use index and search entities. Simply use special
+It's very easy to search ofr entities. Simply use special
 orm entity tag close to fields that should be used in search:
 
 ```go
@@ -1305,7 +1305,7 @@ package main
 
 import "github.com/latolukasz/orm"
 
-type redisSearchEntity struct {
+type MyEntity struct {
  orm.ORM             `orm:"redisSearch=search"`
  ID              uint
  Name            string             `orm:"searchable"`
@@ -1317,14 +1317,14 @@ type redisSearchEntity struct {
   
 ```
 
-That's it. orm.NewRedisSearchIndexer will create index for you, fill it , alter if needed.
+That's it:)
 All you need to do from now is to add/edit/delete entities as always using Flush() and FlushLazy().
 
 Tags:
  * **searchable** - you can search for this entity using where condition for this field
  * **sortable** - you can sort results using this field
 
-Now it's time to search entities:
+Now it's time to search some entities:
 
 
 ```go
@@ -1333,6 +1333,9 @@ package main
 import "github.com/latolukasz/orm"
 
 func main() {
+
+  // engine := ...	 
+  	
  query := &orm.RedisSearchQuery{}
  query.Query("adam").Sort("Age", false).FilterIntMinMax("Age", 6, 8).FilterTag("Enum", "active", "blocked")
  
@@ -1356,7 +1359,7 @@ Read more about redis search query syntax [here](https://oss.redislabs.com/redis
 
 ### Building your own redis search index
 
-If you need to build more advanced redis search simply register an index manually. Here some example:
+If you need to build more advanced redis search simply register an index manually. Below example:
 
 ```go
 package main
