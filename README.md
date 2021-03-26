@@ -11,6 +11,7 @@ ORM that delivers support for full stack data access:
  * MySQL - for relational data
  * Redis - for NoSQL in memory shared cache
  * Elastic Search - for full text search
+ * Redis Search - for full text and in-memory search
  * Local Cache - in memory local (not shared) cache
  * ClickHouse - time series database
  
@@ -41,6 +42,7 @@ Menu:
  * [Query logging](https://github.com/latolukasz/orm#query-logging) 
  * [Logger](https://github.com/latolukasz/orm#logger) 
  * [Event broker](https://github.com/latolukasz/orm#event-broker)
+ * [Redis search](https://github.com/latolukasz/orm#redis-search)
  * [Tools](https://github.com/latolukasz/orm#tools)
 
 ## Configuration
@@ -1262,10 +1264,56 @@ another_pool:
       - test-group-2 # you can register another consumers to read logs  
 ```
 
+## Redis search
 
-## Tools
+Be sure your redis has [Redis Search module](https://github.com/RediSearch/RediSearch) 2.X installed.
 
-Redis streams statistics
+### Indexer
+
+You need to run special script that is indexing data in redis search for you.
+Be sure that this script is running in your code:
+
+```go
+package main
+
+import "github.com/latolukasz/orm"
+func main() {
+ indexer := orm.NewRedisSearchIndexer(engine)
+ indexer.Run(context.Background())
+}
+```
+
+### Entity redis search
+
+It's very easy to use index and search entities. Simply use special
+orm entity tag close to fields that should be used in search:
+
+```go
+package main
+
+import "github.com/latolukasz/orm/tools"
+
+type redisSearchEntity struct {
+ orm.ORM             `orm:"redisSearch=search"`
+ ID              uint
+ Name            string             `orm:"searchable"`
+ Age             uint64             `orm:"searchable;sortable"`
+ Balance         int64              `orm:"sortable"`
+ Weight          float64            `orm:"searchable"`
+ Enum            string             `orm:"enum=orm.TestEnum;required;searchable"`
+}
+  
+```
+
+That's it. orm.NewRedisSearchIndexer will create index for you, fill it , alter if needed.
+All you need to do from now is to add/edit/delete entities as always using Flush() and FlushLazy().
+
+Tags:
+ * **searchable** - you can search for this entity using where condition for this field
+ * **sortable** - you can sort results using this field
+
+Now it's time to search entities:
+
 
 ```go
 package main
@@ -1273,6 +1321,40 @@ package main
 import "github.com/latolukasz/orm/tools"
 
 func main() {
-   stats := tools.GetRedisStreamsStatistics(engine) 
+ query := &orm.RedisSearchQuery{}
+ query.Query("adam").Sort("Age", false).FilterIntMinMax("Age", 6, 8).FilterTag("Enum", "active", "blocked")
+ 
+ // getting ids
+ ids, total := engine.RedisSearchIds(entity, query, orm.NewPager(1, 50))
+ // getting entities
+ total = engine.RedisSearch(&entities, query, NewPager(1, 10))
+ // getting entity
+ found := engine.RedisSearchOne(entity, query)
+ 
+ // some another examples of query
+ query.FilterInt("Age", 12)
+ query.FilterIntNull("Age")
+ query.FilterIntGreaterEqual("Age", 12)
+ query.FilterDateGreaterEqual("Age", time.Now())
+ query.FilterBool("Active", true)
+ query.Query("@y:foo (-@x:foo) (-@x:bar)")
+}    
+```
+Read more about redis search query syntax [here](https://oss.redislabs.com/redisearch/Query_Syntax/).
+
+## Tools
+
+```go
+package main
+
+import "github.com/latolukasz/orm/tools"
+
+func main() {
+   // Redis streams statistics	
+   tools.GetRedisStreamsStatistics(engine)
+   // Redis statistics	
+   tools.GetRedisStatistics(engine)
+   // Redis search statistics	
+   tools.GetRedisSearchStatistics(engine)
 }    
 ```
