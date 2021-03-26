@@ -25,6 +25,11 @@ type LogQueueValue struct {
 	Updated   time.Time
 }
 
+type dirtyQueueValue struct {
+	Event   EventAsMap
+	Streams []string
+}
+
 type AsyncConsumer struct {
 	engine            *Engine
 	name              string
@@ -34,10 +39,11 @@ type AsyncConsumer struct {
 	heartBeatDuration time.Duration
 	errorHandler      ConsumerErrorHandler
 	logLogger         func(log *LogQueueValue)
+	redisFlusher      RedisFlusher
 }
 
 func NewAsyncConsumer(engine *Engine, name string) *AsyncConsumer {
-	return &AsyncConsumer{engine: engine, name: name, block: time.Minute}
+	return &AsyncConsumer{engine: engine, name: name, block: time.Minute, redisFlusher: engine.NewRedisFlusher()}
 }
 
 func (r *AsyncConsumer) DisableLoop() {
@@ -158,6 +164,13 @@ func (r *AsyncConsumer) handleQueries(engine *Engine, validMap map[string]interf
 					id += db.autoincrement
 				}
 			}
+			dirtyEvents, has := validMap["d"]
+			if has {
+				for _, row := range dirtyEvents.([]interface{}) {
+					row.(map[string]interface{})["Event"].(map[string]interface{})["I"] = id
+					id += db.autoincrement
+				}
+			}
 		} else {
 			ids[i] = 0
 		}
@@ -182,6 +195,17 @@ func (r *AsyncConsumer) handleQueries(engine *Engine, validMap map[string]interf
 			}
 			r.handleLog(logEvent)
 		}
+	}
+	dirtyEvents, has := validMap["d"]
+	if has {
+		for _, row := range dirtyEvents.([]interface{}) {
+			asMap := row.(map[string]interface{})
+			event := asMap["Event"].(map[string]interface{})
+			for _, stream := range asMap["Streams"].([]interface{}) {
+				r.redisFlusher.PublishMap(stream.(string), event)
+			}
+		}
+		r.redisFlusher.Flush()
 	}
 	return ids
 }

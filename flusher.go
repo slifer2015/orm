@@ -408,12 +408,16 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			sql += " WHERE `ID` = " + strconv.FormatUint(currentID, 10)
 			db := schema.GetMysql(f.engine)
 			if lazy {
-				logEvent := f.updateCacheAfterUpdate(dbData, entity, bind, schema, currentID, true)
+				var logEvents []*LogQueueValue
+				var dirtyEvents []*dirtyQueueValue
+				logEvent, dirtyEvent := f.updateCacheAfterUpdate(dbData, entity, bind, schema, currentID, true)
 				if logEvent != nil {
-					f.fillLazyQuery(db.GetPoolCode(), sql, nil, logEvent)
-				} else {
-					f.fillLazyQuery(db.GetPoolCode(), sql, nil)
+					logEvents = append(logEvents, logEvent)
 				}
+				if dirtyEvent != nil {
+					dirtyEvents = append(dirtyEvents, dirtyEvent)
+				}
+				f.fillLazyQuery(db.GetPoolCode(), sql, nil, logEvents, dirtyEvents)
 			} else {
 				if f.updateSQLs == nil {
 					f.updateSQLs = make(map[string][]string)
@@ -483,13 +487,17 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 		db := schema.GetMysql(f.engine)
 		if lazy {
 			var logEvents []*LogQueueValue
+			var dirtyEvents []*dirtyQueueValue
 			for key, entity := range insertReflectValues[typeOf] {
-				logEvent := f.updateCacheForInserted(entity, lazy, 0, insertBinds[typeOf][key])
+				logEvent, dirtyEvent := f.updateCacheForInserted(entity, lazy, 0, insertBinds[typeOf][key])
 				if logEvent != nil {
 					logEvents = append(logEvents, logEvent)
 				}
+				if dirtyEvent != nil {
+					dirtyEvents = append(dirtyEvents, dirtyEvent)
+				}
 			}
-			f.fillLazyQuery(db.GetPoolCode(), sql, insertArguments[typeOf], logEvents...)
+			f.fillLazyQuery(db.GetPoolCode(), sql, insertArguments[typeOf], logEvents, dirtyEvents)
 		} else {
 			res := db.Exec(sql, insertArguments[typeOf]...)
 			id := res.LastInsertId()
@@ -522,15 +530,21 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			schema := getTableSchema(f.engine.registry, typeOf)
 			ids := make([]interface{}, len(deleteBinds))
 			var logEvents []*LogQueueValue
+			var dirtyEvents []*dirtyQueueValue
 			i := 0
 			for id, entity := range deleteBinds {
 				ids[i] = id
 				i++
 				if lazy {
 					orm := entity.getORM()
-					logEvent := f.addToLogQueue(schema, id, f.convertDBDataToMap(schema, orm.dBData), nil, orm.logMeta, lazy)
+					bind := f.convertDBDataToMap(schema, orm.dBData)
+					logEvent := f.addToLogQueue(schema, id, bind, nil, orm.logMeta, lazy)
 					if logEvent != nil {
 						logEvents = append(logEvents, logEvent)
+					}
+					dirtyEvent := f.addDirtyQueues(bind, schema, id, "d", lazy)
+					if dirtyEvent != nil {
+						dirtyEvents = append(dirtyEvents, dirtyEvent)
 					}
 				}
 			}
@@ -538,11 +552,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			sql := "DELETE FROM `" + schema.tableName + "` WHERE " + NewWhere("`ID` IN ?", ids).String()
 			db := schema.GetMysql(f.engine)
 			if lazy {
-				if len(logEvents) > 0 {
-					f.fillLazyQuery(db.GetPoolCode(), sql, ids, logEvents...)
-				} else {
-					f.fillLazyQuery(db.GetPoolCode(), sql, ids)
-				}
+				f.fillLazyQuery(db.GetPoolCode(), sql, ids, logEvents, dirtyEvents)
 			} else {
 				usage := schema.GetUsage(f.engine.registry)
 				if len(usage) > 0 {
@@ -586,8 +596,8 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			for id, entity := range deleteBinds {
 				dbData := entity.getORM().dBData
 				bind := f.convertDBDataToMap(schema, dbData)
-				f.addDirtyQueues(bind, schema, id, "d")
 				if !lazy {
+					f.addDirtyQueues(bind, schema, id, "d", lazy)
 					f.addToLogQueue(schema, id, bind, nil, entity.getORM().logMeta, lazy)
 				}
 				if hasLocalCache {
@@ -663,7 +673,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 	}
 }
 
-func (f *flusher) updateCacheForInserted(entity Entity, lazy bool, id uint64, bind map[string]interface{}) *LogQueueValue {
+func (f *flusher) updateCacheForInserted(entity Entity, lazy bool, id uint64, bind map[string]interface{}) (*LogQueueValue, *dirtyQueueValue) {
 	schema := entity.getORM().tableSchema
 	localCache, hasLocalCache := schema.GetLocalCache(f.engine)
 	if !hasLocalCache && f.engine.hasRequestCache {
@@ -688,8 +698,7 @@ func (f *flusher) updateCacheForInserted(entity Entity, lazy bool, id uint64, bi
 		f.getRedisFlusher().Del(redisCache.code, keys...)
 	}
 	f.fillRedisSearchFromBind(schema, bind, id)
-	f.addDirtyQueues(bind, schema, id, "i")
-	return f.addToLogQueue(schema, id, nil, bind, entity.getORM().logMeta, lazy)
+	return f.addToLogQueue(schema, id, nil, bind, entity.getORM().logMeta, lazy), f.addDirtyQueues(bind, schema, id, "i", lazy)
 }
 
 func (f *flusher) getRedisFlusher() *redisFlusher {
@@ -709,7 +718,7 @@ func (f *flusher) getLazyMap() map[string]interface{} {
 	return f.lazyMap
 }
 
-func (f *flusher) updateCacheAfterUpdate(dbData []interface{}, entity Entity, bind Bind, schema *tableSchema, currentID uint64, lazy bool) *LogQueueValue {
+func (f *flusher) updateCacheAfterUpdate(dbData []interface{}, entity Entity, bind Bind, schema *tableSchema, currentID uint64, lazy bool) (*LogQueueValue, *dirtyQueueValue) {
 	var old []interface{}
 	localCache, hasLocalCache := schema.GetLocalCache(f.engine)
 	redisCache, hasRedis := schema.GetRedisCache(f.engine)
@@ -741,15 +750,16 @@ func (f *flusher) updateCacheAfterUpdate(dbData []interface{}, entity Entity, bi
 		redisFlusher.Del(redisCache.code, keys...)
 	}
 	f.fillRedisSearchFromBind(schema, bind, entity.GetID())
-	f.addDirtyQueues(bind, schema, currentID, "u")
+	dirtyValue := f.addDirtyQueues(bind, schema, currentID, "u", lazy)
 	if schema.hasLog {
-		return f.addToLogQueue(schema, currentID, f.convertDBDataToMap(schema, old), bind, entity.getORM().logMeta, lazy)
+		return f.addToLogQueue(schema, currentID, f.convertDBDataToMap(schema, old), bind, entity.getORM().logMeta, lazy), dirtyValue
 	}
-	return nil
+	return nil, dirtyValue
 }
 
-func (f *flusher) addDirtyQueues(bind map[string]interface{}, schema *tableSchema, id uint64, action string) {
+func (f *flusher) addDirtyQueues(bind map[string]interface{}, schema *tableSchema, id uint64, action string, lazy bool) *dirtyQueueValue {
 	var key EventAsMap
+	var allStreams []string
 	for column, tags := range schema.tags {
 		queues, has := tags["dirty"]
 		if !has {
@@ -766,10 +776,16 @@ func (f *flusher) addDirtyQueues(bind map[string]interface{}, schema *tableSchem
 		if key == nil {
 			key = EventAsMap{"E": schema.t.String(), "I": id, "A": action}
 		}
+
 		for _, queueName := range queueNames {
-			f.getRedisFlusher().PublishMap(queueName, key)
+			if !lazy {
+				f.getRedisFlusher().PublishMap(queueName, key)
+			} else {
+				allStreams = append(allStreams, queueName)
+			}
 		}
 	}
+	return &dirtyQueueValue{Event: key, Streams: allStreams}
 }
 
 func (f *flusher) addToLogQueue(tableSchema *tableSchema, id uint64, before Bind, changes Bind, entityMeta Bind, lazy bool) *LogQueueValue {
@@ -899,7 +915,7 @@ func (f *flusher) addLocalCacheDeletes(cacheCode string, keys ...string) {
 	f.localCacheDeletes[cacheCode] = append(f.localCacheDeletes[cacheCode], keys...)
 }
 
-func (f *flusher) fillLazyQuery(dbCode string, sql string, values []interface{}, logEvent ...*LogQueueValue) {
+func (f *flusher) fillLazyQuery(dbCode string, sql string, values []interface{}, logEvent []*LogQueueValue, dirtyData []*dirtyQueueValue) {
 	lazyMap := f.getLazyMap()
 	updatesMap := lazyMap["q"]
 	if updatesMap == nil {
@@ -913,6 +929,9 @@ func (f *flusher) fillLazyQuery(dbCode string, sql string, values []interface{},
 	lazyMap["q"] = append(updatesMap.([]interface{}), lazyValue)
 	if len(logEvent) > 0 {
 		lazyMap["l"] = logEvent
+	}
+	if len(dirtyData) > 0 {
+		lazyMap["d"] = dirtyData
 	}
 }
 

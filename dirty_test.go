@@ -176,4 +176,73 @@ func TestDirtyConsumer(t *testing.T) {
 		assert.Equal(t, "dirtyReceiverEntity", dirty.TableSchema().GetTableName())
 	})
 	assert.True(t, valid)
+
+	e = &dirtyReceiverEntity{Name: "Adam", Age: 30}
+	engine.FlushLazy(e)
+
+	valid = false
+	consumer.Consume(ctx, 1, true, func(events []Event) {
+		valid = true
+	})
+	assert.False(t, valid)
+
+	receiver := NewAsyncConsumer(engine, "default-consumer")
+	receiver.DisableLoop()
+	receiver.block = time.Millisecond
+	receiver.Digest(context.Background(), 100)
+
+	consumer.Consume(ctx, 1, true, func(events []Event) {
+		assert.Len(t, events, 1)
+		dirty := EventDirtyEntity(events[0])
+		assert.True(t, dirty.Added())
+		assert.False(t, dirty.Updated())
+		assert.False(t, dirty.Deleted())
+		assert.Equal(t, uint64(3), dirty.ID())
+		assert.Equal(t, "dirtyReceiverEntity", dirty.TableSchema().GetTableName())
+		valid = true
+	})
+	assert.True(t, valid)
+
+	engine.LoadByID(3, e)
+	e.Age = 40
+	engine.FlushLazy(e)
+	valid = false
+	consumer.Consume(ctx, 1, true, func(events []Event) {
+		valid = true
+	})
+	assert.False(t, valid)
+	receiver.Digest(context.Background(), 100)
+	consumer.Consume(ctx, 1, true, func(events []Event) {
+		assert.Len(t, events, 1)
+		dirty := EventDirtyEntity(events[0])
+		assert.False(t, dirty.Added())
+		assert.True(t, dirty.Updated())
+		assert.False(t, dirty.Deleted())
+		assert.Equal(t, uint64(3), dirty.ID())
+		assert.Equal(t, "dirtyReceiverEntity", dirty.TableSchema().GetTableName())
+		valid = true
+	})
+	assert.True(t, valid)
+
+	engine.LoadByID(3, e)
+	flusher := engine.NewFlusher()
+	flusher.Delete(e)
+	flusher.FlushLazy()
+	valid = false
+	consumer.Consume(ctx, 1, true, func(events []Event) {
+		valid = true
+	})
+	assert.False(t, valid)
+	receiver.Digest(context.Background(), 100)
+	consumer.Consume(ctx, 1, true, func(events []Event) {
+		assert.Len(t, events, 1)
+		dirty := EventDirtyEntity(events[0])
+		assert.False(t, dirty.Added())
+		assert.False(t, dirty.Updated())
+		assert.True(t, dirty.Deleted())
+		assert.Equal(t, uint64(3), dirty.ID())
+		assert.Equal(t, "dirtyReceiverEntity", dirty.TableSchema().GetTableName())
+		valid = true
+	})
+	assert.True(t, valid)
 }
