@@ -1283,6 +1283,18 @@ func main() {
 }
 ```
 
+### Redis search index Alters
+
+Every time you run your code be sure you are checking if redis indices are valid:
+
+```go
+altersSearch := engine.GetRedisSearchIndexAlters()
+for _, alter := range altersSearch {
+	// show them or execute: 
+	alter.Execute()
+}
+```
+
 ### Entity redis search
 
 It's very easy to use index and search entities. Simply use special
@@ -1291,7 +1303,7 @@ orm entity tag close to fields that should be used in search:
 ```go
 package main
 
-import "github.com/latolukasz/orm/tools"
+import "github.com/latolukasz/orm"
 
 type redisSearchEntity struct {
  orm.ORM             `orm:"redisSearch=search"`
@@ -1318,7 +1330,7 @@ Now it's time to search entities:
 ```go
 package main
 
-import "github.com/latolukasz/orm/tools"
+import "github.com/latolukasz/orm"
 
 func main() {
  query := &orm.RedisSearchQuery{}
@@ -1341,6 +1353,73 @@ func main() {
 }    
 ```
 Read more about redis search query syntax [here](https://oss.redislabs.com/redisearch/Query_Syntax/).
+
+### Building your own redis search index
+
+If you need to build more advanced redis search simply register an index manually. Here some example:
+
+```go
+package main
+
+import "github.com/latolukasz/orm/tools"
+
+func main() {
+  registry := &orm.Registry{}
+  registry.RegisterRedis("localhost:6383", 0, "search")
+  
+  // register an index:
+  myIndex := &orm.RedisSearchIndex{}
+  myIndex.Name = "my-index"
+  myIndex.RedisPool = "search"
+  myIndex.Prefixes = []string{"my-index:"}
+  myIndex.AddTextField("name", 1, true, false, false)
+  myIndex.AddNumericField("age", true, false)
+  myIndex.AddGeoField("location", false, false)
+  myIndex.Indexer = func(engine *orm.Engine, lastID uint64, pusher orm.RedisSearchIndexPusher) (newID uint64, hasMore bool) {
+     rows := // select from database WHERE ID > lastID ORDER BY ID LIMIT 1000
+     for _, row := range rows {
+      pusher.NewDocument("my-index:" + row.ID)
+      pusher.SetField("name", row.Name)
+      pusher.SetField("age", row.Age)
+      pusher.SetField("location", row.location)
+      pusher.PushDocument()
+      lastID = row.id
+     }
+     return lastID, len(rows) < 1000 // return last used id and false if there ar eno more rows ro index
+  }
+  registry.RegisterRedisSearchIndex(myIndex)
+  validatedRegistry, _ := registry.Validate()
+  engine := validatedRegistry.CreateEngine()
+  
+  // adding, updating documents:
+  pusher := engine.NewRedisSearchIndexPusher("search")
+  pusher.NewDocument("my-index:33")
+  pusher.SetField("name", "Tom")
+  pusher.SetField("age", 12)
+  pusher.SetField("location", "52.2982648,17.0103596")
+  pusher.PushDocument()
+  pusher.NewDocument("my-index:34")
+  pusher.SetField("name", "Adam")
+  pusher.SetField("age", 18)
+  pusher.PushDocument()
+  pusher.DeletewDocuments("my-index:35", "my-index:36")
+  pusher.Flush()
+ 
+  // searching
+  search := engine.GetRedisSearch("search")
+  query := &orm.RedisSearchQuery{}
+  query.Query("tom").Verbatim().NoStopWords().Sort("age", true)
+  
+  // return data from index
+  total, rowsRaw := search.Search("my-index", query, orm.NewPager(1, 2))
+  // return just keys
+  total, keys := search.SearchKeys("my-index", query, orm.NewPager(1, 2))
+  
+  // return only name and age
+ query.Return("name", "age")
+ total, rowsRaw := search.Search("my-index", query, orm.NewPager(1, 2))
+}    
+```
 
 ## Tools
 

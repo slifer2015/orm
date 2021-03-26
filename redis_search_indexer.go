@@ -122,6 +122,7 @@ func (r *RedisSearchIndexer) consume(ctx context.Context) bool {
 
 type RedisSearchIndexPusher interface {
 	NewDocument(key string)
+	DeleteDocuments(key ...string)
 	SetField(key string, value interface{})
 	PushDocument()
 	Flush()
@@ -141,6 +142,10 @@ func (e *Engine) NewRedisSearchIndexPusher(pool string) RedisSearchIndexPusher {
 
 func (p *redisSearchIndexPusher) NewDocument(key string) {
 	p.key = key
+}
+
+func (p *redisSearchIndexPusher) DeleteDocuments(key ...string) {
+	p.pipeline.Del(key...)
 }
 
 func (p *redisSearchIndexPusher) SetField(key string, value interface{}) {
