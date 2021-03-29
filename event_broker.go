@@ -15,7 +15,6 @@ import (
 )
 
 const countPending = 100
-const maxConsumers = 10
 const pendingClaimCheckDuration = time.Minute * 2
 const speedHSetKey = "_orm_ss"
 
@@ -187,6 +186,7 @@ type ConsumerErrorHandler func(err interface{}, event Event) error
 type EventsConsumer interface {
 	Consume(ctx context.Context, count int, blocking bool, handler EventConsumerHandler)
 	DisableLoop()
+	SetLimit(limit int)
 	SetHeartBeat(duration time.Duration, beat func())
 	SetErrorHandler(handler ConsumerErrorHandler)
 }
@@ -245,7 +245,7 @@ func (eb *eventBroker) Consumer(name, group string) EventsConsumer {
 		loop: true, block: time.Second * 30, lockTTL: time.Second * 90, lockTick: time.Minute,
 		garbageTick: time.Second * 30, minIdle: pendingClaimCheckDuration,
 		claimDuration: pendingClaimCheckDuration, speedLimit: 10000, speedPrefixKey: speedPrefixKey,
-		speedLogger: speedLogger}
+		speedLogger: speedLogger, maxConsumers: 1}
 }
 
 type eventsConsumer struct {
@@ -258,6 +258,7 @@ type eventsConsumer struct {
 	speedDBQueries         int
 	speedDBMicroseconds    int64
 	speedRedisQueries      int
+	maxConsumers           int
 	speedRedisMicroseconds int64
 	speedLogger            *speedHandler
 	speedTimeMicroseconds  int64
@@ -283,6 +284,10 @@ type eventsConsumer struct {
 
 func (r *eventsConsumer) DisableLoop() {
 	r.loop = false
+}
+
+func (r *eventsConsumer) SetLimit(limit int) {
+	r.maxConsumers = limit
 }
 
 func (r *eventsConsumer) SetHeartBeat(duration time.Duration, beat func()) {
@@ -323,10 +328,10 @@ func (r *eventsConsumer) consume(ctx context.Context, count int, blocking bool, 
 		lockName = uniqueLockKey + "-" + strconv.Itoa(nr)
 		locked, has := locker.Obtain(ctx, lockName, r.lockTTL, 0)
 		if !has {
-			if nr < maxConsumers {
+			if nr < r.maxConsumers {
 				continue
 			}
-			panic(fmt.Errorf("consumer %s for group %s limit %d reached", r.getName(), r.group, maxConsumers))
+			panic(fmt.Errorf("consumer %s for group %s limit %d reached", r.name, r.group, r.maxConsumers))
 		}
 		lock = locked
 		r.nr = nr

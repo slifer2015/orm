@@ -201,6 +201,7 @@ func TestRedisStreamGroupConsumerAutoScaled(t *testing.T) {
 		consumer := broker.Consumer("test-consumer", "test-group")
 		consumer.(*eventsConsumer).block = time.Millisecond
 		consumer.DisableLoop()
+		consumer.SetLimit(2)
 		consumer.Consume(context.Background(), 5, true, func(events []Event) {
 			for _, event := range events {
 				event.Skip()
