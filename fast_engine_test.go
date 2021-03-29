@@ -34,6 +34,19 @@ func TestFastEngine(t *testing.T) {
 	entity = &loadByIDEntity{}
 	fastEntity.Fill(entity)
 	assert.Equal(t, "a", entity.Name)
+
+	results, missing := fastEngine.LoadByIDs([]uint64{1, 2, 3, 4}, entity)
+	assert.NotNil(t, results)
+	assert.NotNil(t, missing)
+	assert.Len(t, results, 3)
+	assert.Len(t, missing, 1)
+	assert.Equal(t, uint64(4), missing[0])
+	assert.Equal(t, uint64(1), results[0].GetID())
+	assert.Equal(t, uint64(2), results[1].GetID())
+	assert.Equal(t, uint64(3), results[2].GetID())
+	assert.Equal(t, "a", results[0].Get("Name"))
+	assert.Equal(t, "b", results[1].Get("Name"))
+	assert.Equal(t, "c", results[2].Get("Name"))
 }
 
 func BenchmarkLoadByIdLocalCacheFastEngine(b *testing.B) {
@@ -59,5 +72,31 @@ func BenchmarkLoadByIdLocalCacheFastEngine(b *testing.B) {
 	// BenchmarkLoadByIdLocalCacheFastEngine-12    	 4452970	       274 ns/op	      56 B/op	       2 allocs/op
 	for n := 0; n < b.N; n++ {
 		_, _ = fastEngine.LoadByID(1, e)
+	}
+}
+
+func BenchmarkLoadByIdsLocalCacheFastEngine(b *testing.B) {
+	entity := &schemaEntity{}
+	ref := &schemaEntityRef{}
+	registry := &Registry{}
+	registry.RegisterEnumStruct("orm.TestEnum", TestEnum)
+	registry.RegisterLocalCache(10000)
+	engine := PrepareTables(nil, registry, 5, entity, ref)
+	e := &schemaEntity{}
+	e.Name = "Name"
+	e.Uint32 = 1
+	e.Int32 = 1
+	e.Int8 = 1
+	e.Enum = TestEnum.A
+	e.RefOne = &schemaEntityRef{}
+	engine.Flush(e)
+	fastEngine := engine.NewFastEngine()
+	_, _ = fastEngine.LoadByID(1, e)
+	b.ResetTimer()
+	b.ReportAllocs()
+	// BenchmarkLoadByIdsLocalCache-12    	  477350	      2232 ns/op	    1280 B/op	      12 allocs/op
+	// BenchmarkLoadByIdsLocalCacheFastEngine-12    	 1613864	       703.0 ns/op	     432 B/op	       7 allocs/op
+	for n := 0; n < b.N; n++ {
+		fastEngine.LoadByIDs([]uint64{1}, e)
 	}
 }

@@ -30,8 +30,8 @@ func (fe *fastEngine) LoadByID(id uint64, entity Entity, references ...string) (
 }
 
 func (fe *fastEngine) LoadByIDs(ids []uint64, entity Entity, references ...string) (result []FastEntity, missing []uint64) {
-	missing, _ = tryByIDs(fe.engine, ids, false, reflect.ValueOf(entity), references)
-	return nil, missing
+	missing, _, result = tryByIDs(fe.engine, ids, false, reflect.ValueOf(entity), references)
+	return result, missing
 }
 
 type fastEntity struct {

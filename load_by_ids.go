@@ -8,11 +8,16 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Value, references []string) (missing []uint64, schema *tableSchema) {
+func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Value, references []string) (missing []uint64, schema *tableSchema, result []FastEntity) {
 	missing = make([]uint64, 0)
+	if !fillStruct {
+		result = make([]FastEntity, 0)
+	}
 	valOrigin := entities
-	valOrigin.SetLen(0)
-	valOrigin.SetCap(0)
+	if fillStruct {
+		valOrigin.SetLen(0)
+		valOrigin.SetCap(0)
+	}
 	originalIDs := ids
 	lenIDs := len(ids)
 	if lenIDs == 0 {
@@ -34,13 +39,19 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 			if row == nil {
 				missing = append(missing, ids[i])
 			} else {
-				val := reflect.New(schema.t)
-				entity := val.Interface().(Entity)
-				fillFromDBRow(ids[i], engine, row, entity, false)
-				v = reflect.Append(v, val)
+				if fillStruct {
+					val := reflect.New(schema.t)
+					entity := val.Interface().(Entity)
+					fillFromDBRow(ids[i], engine, row, entity, false)
+					v = reflect.Append(v, val)
+				} else {
+					result = append(result, &fastEntity{data: row, engine: engine, schema: schema})
+				}
 			}
 		}
-		valOrigin.Set(v)
+		if fillStruct {
+			valOrigin.Set(v)
+		}
 		if len(references) > 0 && v.Len() > 0 {
 			warmUpReferences(engine, schema, entities, references, true)
 		}
@@ -49,7 +60,7 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 
 	var localCacheKeys []string
 	var redisCacheKeys []string
-	results := make(map[string]Entity, lenIDs)
+	results := make(map[string]interface{}, lenIDs)
 	keysMapping := make(map[string]uint64, lenIDs)
 	keysReversed := make(map[uint64]string, lenIDs)
 	cacheKeys := make([]string, lenIDs)
@@ -69,12 +80,12 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 	if hasLocalCache || hasRedis {
 		if hasLocalCache {
 			resultsLocalCache := localCache.MGet(cacheKeys...)
-			cacheKeys = getKeysForNils(engine, schema, resultsLocalCache, keysMapping, results, false)
+			cacheKeys = getKeysForNils(engine, schema, resultsLocalCache, keysMapping, results, false, fillStruct)
 			localCacheKeys = cacheKeys
 		}
 		if hasRedis && len(cacheKeys) > 0 {
 			resultsRedis := redisCache.MGet(cacheKeys...)
-			cacheKeys = getKeysForNils(engine, schema, resultsRedis, keysMapping, results, true)
+			cacheKeys = getKeysForNils(engine, schema, resultsRedis, keysMapping, results, true, fillStruct)
 			redisCacheKeys = cacheKeys
 		}
 		ids = make([]uint64, len(cacheKeys))
@@ -84,10 +95,16 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 	}
 	l := len(ids)
 	if l > 0 {
-		_ = search(false, engine, NewWhere("`ID` IN ?", ids), NewPager(1, l), false, entities)
-		for i := 0; i < entities.Len(); i++ {
-			e := entities.Index(i).Interface().(Entity)
-			results[schema.getCacheKey(e.GetID())] = e
+		_, fastEntities := search(false, engine, NewWhere("`ID` IN ?", ids), NewPager(1, l), false, fillStruct, entities)
+		if fillStruct {
+			for i := 0; i < entities.Len(); i++ {
+				e := entities.Index(i).Interface().(Entity)
+				results[schema.getCacheKey(e.GetID())] = e
+			}
+		} else {
+			for _, fastEntity := range fastEntities {
+				results[schema.getCacheKey(fastEntity.GetID())] = fastEntity
+			}
 		}
 	}
 	if hasLocalCache {
@@ -102,7 +119,11 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 				if val == nil {
 					toSet = "nil"
 				} else {
-					toSet = buildLocalCacheValue(val)
+					if fillStruct {
+						toSet = buildLocalCacheValue(val.(Entity).getORM().dBData)
+					} else {
+						toSet = buildLocalCacheValue(val.(*fastEntity).data)
+					}
 				}
 				pairs[i+1] = toSet
 				i += 2
@@ -123,7 +144,11 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 				if val == nil {
 					toSet = "nil"
 				} else {
-					toSet = buildRedisValue(val)
+					if fillStruct {
+						toSet = buildRedisValue(val.(Entity).getORM().dBData)
+					} else {
+						toSet = buildRedisValue(val.(*fastEntity).data)
+					}
 				}
 				pairs[i+1] = toSet
 				i += 2
@@ -133,18 +158,26 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 	}
 
 	valOrigin = entities
-	valOrigin.SetLen(0)
-	valOrigin.SetCap(0)
+	if fillStruct {
+		valOrigin.SetLen(0)
+		valOrigin.SetCap(0)
+	}
 	v := valOrigin
 	for _, id := range originalIDs {
 		val := results[keysReversed[id]]
 		if val == nil {
 			missing = append(missing, id)
 		} else {
-			v = reflect.Append(v, reflect.ValueOf(val))
+			if fillStruct {
+				v = reflect.Append(v, reflect.ValueOf(val))
+			} else {
+				result = append(result, val.(FastEntity))
+			}
 		}
 	}
-	valOrigin.Set(v)
+	if fillStruct {
+		valOrigin.Set(v)
+	}
 	if len(references) > 0 && v.Len() > 0 {
 		warmUpReferences(engine, schema, entities, references, true)
 	}
@@ -152,7 +185,7 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 }
 
 func getKeysForNils(engine *Engine, schema *tableSchema, rows map[string]interface{}, keysMapping map[string]uint64,
-	results map[string]Entity, fromRedis bool) []string {
+	results map[string]interface{}, fromRedis bool, fillStruct bool) []string {
 	keys := make([]string, 0)
 	for k, v := range rows {
 		if v == nil {
@@ -161,16 +194,24 @@ func getKeysForNils(engine *Engine, schema *tableSchema, rows map[string]interfa
 			if v == "nil" {
 				results[k] = nil
 			} else if fromRedis {
-				entity := reflect.New(schema.t).Interface().(Entity)
 				var decoded []interface{}
 				_ = jsoniter.ConfigFastest.Unmarshal([]byte(v.(string)), &decoded)
 				convertDataFromJSON(schema.fields, 0, decoded)
-				fillFromDBRow(keysMapping[k], engine, decoded, entity, false)
-				results[k] = entity
+				if fillStruct {
+					entity := reflect.New(schema.t).Interface().(Entity)
+					fillFromDBRow(keysMapping[k], engine, decoded, entity, false)
+					results[k] = entity
+				} else {
+					results[k] = &fastEntity{data: decoded, engine: engine, schema: schema}
+				}
 			} else {
-				entity := reflect.New(schema.t).Interface().(Entity)
-				fillFromDBRow(keysMapping[k], engine, v.([]interface{}), entity, false)
-				results[k] = entity
+				if fillStruct {
+					entity := reflect.New(schema.t).Interface().(Entity)
+					fillFromDBRow(keysMapping[k], engine, v.([]interface{}), entity, false)
+					results[k] = entity
+				} else {
+					results[k] = &fastEntity{data: v.([]interface{}), engine: engine, schema: schema}
+				}
 			}
 		}
 	}
@@ -344,7 +385,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 		for cacheKey, refs := range v {
 			e := refs[0].Interface().(Entity)
 			if e.Loaded() {
-				values = append(values, cacheKey, buildRedisValue(e))
+				values = append(values, cacheKey, buildRedisValue(e.getORM().dBData))
 			} else {
 				values = append(values, cacheKey, "nil")
 			}
@@ -359,7 +400,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 		for cacheKey, refs := range v {
 			e := refs[0].Interface().(Entity)
 			if e.Loaded() {
-				values = append(values, cacheKey, buildLocalCacheValue(e))
+				values = append(values, cacheKey, buildLocalCacheValue(e.getORM().dBData))
 			} else {
 				values = append(values, cacheKey, "nil")
 			}

@@ -682,14 +682,14 @@ func (f *flusher) updateCacheForInserted(entity Entity, lazy bool, id uint64, bi
 	}
 	if hasLocalCache {
 		if !lazy {
-			f.addLocalCacheSet(localCache.code, schema.getCacheKey(id), buildLocalCacheValue(entity))
+			f.addLocalCacheSet(localCache.code, schema.getCacheKey(id), buildLocalCacheValue(entity.getORM().dBData))
 		} else {
 			f.addLocalCacheDeletes(localCache.code, schema.getCacheKey(id))
 		}
 		keys := f.getCacheQueriesKeys(schema, bind, entity.getORM().dBData, true)
 		f.addLocalCacheDeletes(localCache.code, keys...)
 	} else if !lazy && f.engine.dataLoader != nil {
-		f.addToDataLoader(schema, id, buildLocalCacheValue(entity))
+		f.addToDataLoader(schema, id, buildLocalCacheValue(entity.getORM().dBData))
 	}
 	redisCache, hasRedis := schema.GetRedisCache(f.engine)
 	if hasRedis {
@@ -733,13 +733,13 @@ func (f *flusher) updateCacheAfterUpdate(dbData []interface{}, entity Entity, bi
 	}
 	if hasLocalCache {
 		cacheKey := schema.getCacheKey(currentID)
-		f.addLocalCacheSet(localCache.code, cacheKey, buildLocalCacheValue(entity))
+		f.addLocalCacheSet(localCache.code, cacheKey, buildLocalCacheValue(entity.getORM().dBData))
 		keys := f.getCacheQueriesKeys(schema, bind, dbData, false)
 		f.addLocalCacheDeletes(localCache.code, keys...)
 		keys = f.getCacheQueriesKeys(schema, bind, old, false)
 		f.addLocalCacheDeletes(localCache.code, keys...)
 	} else if f.engine.dataLoader != nil {
-		f.addToDataLoader(schema, currentID, buildLocalCacheValue(entity))
+		f.addToDataLoader(schema, currentID, buildLocalCacheValue(entity.getORM().dBData))
 	}
 	if hasRedis {
 		redisFlusher := f.getRedisFlusher()

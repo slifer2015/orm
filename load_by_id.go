@@ -94,10 +94,10 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 	}
 	if useCache {
 		if localCache != nil {
-			localCache.Set(cacheKey, buildLocalCacheValue(entity))
+			localCache.Set(cacheKey, buildLocalCacheValue(data))
 		}
 		if redisCache != nil {
-			redisCache.Set(cacheKey, buildRedisValue(entity), 0)
+			redisCache.Set(cacheKey, buildRedisValue(data), 0)
 		}
 	}
 
@@ -109,13 +109,12 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 	return true, data, schema
 }
 
-func buildRedisValue(entity Entity) string {
-	encoded, _ := jsoniter.ConfigFastest.Marshal(buildLocalCacheValue(entity))
+func buildRedisValue(data []interface{}) string {
+	encoded, _ := jsoniter.ConfigFastest.Marshal(buildLocalCacheValue(data))
 	return string(encoded)
 }
 
-func buildLocalCacheValue(entity Entity) []interface{} {
-	data := entity.getORM().dBData
+func buildLocalCacheValue(data []interface{}) []interface{} {
 	b := make([]interface{}, len(data))
 	copy(b, data)
 	return b

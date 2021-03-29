@@ -400,11 +400,12 @@ func (e *Engine) GetRegistry() ValidatedRegistry {
 }
 
 func (e *Engine) SearchWithCount(where *Where, pager *Pager, entities interface{}, references ...string) (totalRows int) {
-	return search(true, e, where, pager, true, reflect.ValueOf(entities).Elem(), references...)
+	totalRows, _ = search(true, e, where, pager, true, true, reflect.ValueOf(entities).Elem(), references...)
+	return totalRows
 }
 
 func (e *Engine) Search(where *Where, pager *Pager, entities interface{}, references ...string) {
-	search(true, e, where, pager, false, reflect.ValueOf(entities).Elem(), references...)
+	search(true, e, where, pager, false, true, reflect.ValueOf(entities).Elem(), references...)
 }
 
 func (e *Engine) SearchIDsWithCount(where *Where, pager *Pager, entity Entity) (results []uint64, totalRows int) {
@@ -474,7 +475,7 @@ func (e *Engine) Load(entity Entity, references ...string) {
 }
 
 func (e *Engine) LoadByIDs(ids []uint64, entities interface{}, references ...string) (missing []uint64) {
-	missing, _ = tryByIDs(e, ids, true, reflect.ValueOf(entities).Elem(), references)
+	missing, _, _ = tryByIDs(e, ids, true, reflect.ValueOf(entities).Elem(), references)
 	return missing
 }
 

@@ -291,7 +291,7 @@ func BenchmarkFillStructDefault(b *testing.B) {
 	e.Enum = TestEnum.A
 	e.RefOne = &schemaEntityRef{}
 	engine.Flush(e)
-	data := buildLocalCacheValue(e)
+	data := buildLocalCacheValue(e.dBData)
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
