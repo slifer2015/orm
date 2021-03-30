@@ -244,7 +244,7 @@ func convertScan(fields *tableFields, start int, pointers []interface{}) int {
 	return start
 }
 
-func searchRow(skipFakeDelete bool, fillStruct bool, engine *Engine, where *Where, entity Entity, references []string) (bool, []interface{}) {
+func searchRow(skipFakeDelete bool, fillStruct bool, engine *Engine, where *Where, entity Entity, references []string) (bool, *tableSchema, []interface{}) {
 	orm := initIfNeeded(engine, entity)
 	schema := orm.tableSchema
 	whereQuery := where.String()
@@ -258,7 +258,7 @@ func searchRow(skipFakeDelete bool, fillStruct bool, engine *Engine, where *Wher
 	results, def := pool.Query(query, where.GetParameters()...)
 	defer def()
 	if !results.Next() {
-		return false, nil
+		return false, schema, nil
 	}
 	pointers := prepareScan(schema)
 	results.Scan(pointers...)
@@ -271,7 +271,7 @@ func searchRow(skipFakeDelete bool, fillStruct bool, engine *Engine, where *Wher
 	if len(references) > 0 {
 		warmUpReferences(engine, schema, entity.getORM().elem, references, false)
 	}
-	return true, pointers
+	return true, schema, pointers
 }
 
 func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, withCount bool,
@@ -327,7 +327,7 @@ func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, wit
 	return totalRows, fastEntities
 }
 
-func searchOne(skipFakeDelete bool, fillStruct bool, engine *Engine, where *Where, entity Entity, references []string) (bool, []interface{}) {
+func searchOne(skipFakeDelete bool, fillStruct bool, engine *Engine, where *Where, entity Entity, references []string) (bool, *tableSchema, []interface{}) {
 	return searchRow(skipFakeDelete, fillStruct, engine, where, entity, references)
 }
 

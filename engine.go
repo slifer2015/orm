@@ -418,7 +418,7 @@ func (e *Engine) SearchIDs(where *Where, pager *Pager, entity Entity) []uint64 {
 }
 
 func (e *Engine) SearchOne(where *Where, entity Entity, references ...string) (found bool) {
-	found, _ = searchOne(true, true, e, where, entity, references)
+	found, _, _ = searchOne(true, true, e, where, entity, references)
 	return found
 }
 

@@ -82,7 +82,7 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 		}
 	}
 
-	found, data = searchRow(false, fillStruct, engine, NewWhere("`ID` = ?", id), entity, nil)
+	found, _, data = searchRow(false, fillStruct, engine, NewWhere("`ID` = ?", id), entity, nil)
 	if !found {
 		if localCache != nil {
 			localCache.Set(cacheKey, "nil")

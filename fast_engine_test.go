@@ -47,6 +47,31 @@ func TestFastEngine(t *testing.T) {
 	assert.Equal(t, "a", results[0].Get("Name"))
 	assert.Equal(t, "b", results[1].Get("Name"))
 	assert.Equal(t, "c", results[2].Get("Name"))
+
+	results = fastEngine.Search(NewWhere("ID < 50 ORDER BY ID DESC"), NewPager(1, 10), entity)
+	assert.NotNil(t, results)
+	assert.Len(t, results, 3)
+	assert.Equal(t, uint64(3), results[0].GetID())
+	assert.Equal(t, uint64(2), results[1].GetID())
+	assert.Equal(t, uint64(1), results[2].GetID())
+	assert.Equal(t, "c", results[0].Get("Name"))
+	assert.Equal(t, "b", results[1].Get("Name"))
+	assert.Equal(t, "a", results[2].Get("Name"))
+
+	total, results := fastEngine.SearchWithCount(NewWhere("ID < 3 ORDER BY ID DESC"), NewPager(1, 10), entity)
+	assert.Equal(t, 2, total)
+	assert.NotNil(t, results)
+	assert.Len(t, results, 2)
+	assert.Equal(t, uint64(2), results[0].GetID())
+	assert.Equal(t, uint64(1), results[1].GetID())
+	assert.Equal(t, "b", results[0].Get("Name"))
+	assert.Equal(t, "a", results[1].Get("Name"))
+
+	found, result := fastEngine.SearchOne(NewWhere("ID = 3 ORDER BY ID DESC"), entity)
+	assert.True(t, found)
+	assert.NotNil(t, result)
+	assert.Equal(t, uint64(3), result.GetID())
+	assert.Equal(t, "c", result.Get("Name"))
 }
 
 func BenchmarkLoadByIdLocalCacheFastEngine(b *testing.B) {
