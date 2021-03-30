@@ -6,11 +6,14 @@ import (
 	"testing"
 	"time"
 
+	apexLog "github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
+
 	"github.com/stretchr/testify/assert"
 )
 
 type logReceiverEntity1 struct {
-	ORM      `orm:"log;asyncRedisLogs=default"`
+	ORM      `orm:"log;asyncRedisLogs=default;redisCache"`
 	ID       uint
 	Name     string
 	LastName string
@@ -18,7 +21,7 @@ type logReceiverEntity1 struct {
 }
 
 type logReceiverEntity2 struct {
-	ORM  `orm:"log"`
+	ORM  `orm:"redisCache;log"`
 	ID   uint
 	Name string
 	Age  uint64
@@ -166,4 +169,33 @@ func TestLogReceiver(t *testing.T) {
 	assert.False(t, changesNull.Valid)
 	assert.Equal(t, "{\"Name\": \"Eva\", \"Country\": \"Brazil\", \"LastName\": \"Pol\"}", before.String)
 	assert.Equal(t, "{\"user_id\": 12}", meta.String)
+
+	e4 := &logReceiverEntity2{}
+	e5 := &logReceiverEntity2{}
+	engine.LoadByID(1, e4)
+	engine.LoadByID(2, e5)
+	flusher = engine.NewFlusher()
+	engine.GetMysql().Begin()
+	e4.Age = 34
+	flusher.Track(e4)
+	_ = flusher.FlushWithCheck()
+	_ = flusher.FlushWithCheck()
+	e5.Name = "Lucas"
+	flusher.Track(e5)
+	_ = flusher.FlushWithCheck()
+	logger := memory.New()
+	engine.AddQueryLogger(logger, apexLog.InfoLevel)
+	engine.GetMysql().Commit()
+	assert.Len(t, logger.Entries, 2)
+	assert.Equal(t, "[ORM][MYSQL][COMMIT]", logger.Entries[0].Message)
+	assert.Equal(t, "[ORM][REDIS][EXEC]", logger.Entries[1].Message)
+	commands := logger.Entries[1].Fields["commands"].([]string)
+	assert.Len(t, commands, 7)
+	assert.Equal(t, "DEL", commands[0])
+	assert.Equal(t, "d06b9:1", commands[1])
+	assert.Equal(t, "d06b9:2", commands[2])
+	assert.Equal(t, "XAdd", commands[3])
+	assert.Equal(t, "orm-log-channel", commands[4])
+	assert.Equal(t, "XAdd", commands[5])
+	assert.Equal(t, "orm-log-channel", commands[6])
 }

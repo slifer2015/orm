@@ -9,7 +9,7 @@ import (
 )
 
 type dirtyReceiverEntity struct {
-	ORM  `orm:"dirty=entity_changed"`
+	ORM  `orm:"redisCache;dirty=entity_changed"`
 	ID   uint
 	Name string `orm:"dirty=name_changed"`
 	Age  uint64
@@ -241,6 +241,29 @@ func TestDirtyConsumer(t *testing.T) {
 		assert.False(t, dirty.Updated())
 		assert.True(t, dirty.Deleted())
 		assert.Equal(t, uint64(3), dirty.ID())
+		assert.Equal(t, "dirtyReceiverEntity", dirty.TableSchema().GetTableName())
+		valid = true
+	})
+	assert.True(t, valid)
+
+	e = &dirtyReceiverEntity{}
+	engine.LoadByID(1, e)
+	flusher = engine.NewFlusher()
+	e.Age = 38
+	flusher.Track(e)
+	engine.GetMysql().Begin()
+	_ = flusher.FlushWithCheck()
+	engine.GetMysql().Commit()
+
+	valid = false
+	receiver.Digest(context.Background(), 100)
+	consumer.Consume(ctx, 1, true, func(events []Event) {
+		assert.Len(t, events, 1)
+		dirty := EventDirtyEntity(events[0])
+		assert.False(t, dirty.Added())
+		assert.True(t, dirty.Updated())
+		assert.False(t, dirty.Deleted())
+		assert.Equal(t, uint64(1), dirty.ID())
 		assert.Equal(t, "dirtyReceiverEntity", dirty.TableSchema().GetTableName())
 		valid = true
 	})

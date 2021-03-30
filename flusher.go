@@ -667,6 +667,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 	}
 	if len(f.lazyMap) > 0 {
 		f.getRedisFlusher().Publish(lazyChannelName, f.lazyMap)
+		f.lazyMap = nil
 	}
 	if f.redisFlusher != nil && !isInTransaction && root {
 		f.redisFlusher.Flush()
@@ -939,10 +940,8 @@ func (f *flusher) fillLazyQuery(dbCode string, sql string, values []interface{},
 }
 
 func (f *flusher) clear() {
-	f.redisFlusher = nil
 	f.updateSQLs = nil
 	f.deleteBinds = nil
-	f.lazyMap = nil
 	f.localCacheDeletes = nil
 	f.localCacheSets = nil
 	f.dataLoaderSets = nil
