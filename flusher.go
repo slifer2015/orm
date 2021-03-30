@@ -646,7 +646,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			}
 		}
 	} else if isInTransaction {
-		f.engine.afterCommitRedisFlusher = f.redisFlusher
+		f.engine.afterCommitRedisFlusher = f.getRedisFlusher()
 	}
 	for schema, rows := range f.dataLoaderSets {
 		if !isInTransaction {
