@@ -340,7 +340,7 @@ func TestRedisStreamGroupConsumer(t *testing.T) {
 		events[2].Skip()
 		events[3].Skip()
 		events[4].Skip()
-		time.Sleep(time.Millisecond * 20)
+		time.Sleep(time.Millisecond * 30)
 	})
 	assert.Equal(t, 2, iterations)
 	assert.Equal(t, 1, heartBeats)

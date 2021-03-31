@@ -423,11 +423,13 @@ func (e *Engine) SearchOne(where *Where, entity Entity, references ...string) (f
 }
 
 func (e *Engine) CachedSearchOne(entity Entity, indexName string, arguments ...interface{}) (found bool) {
-	return cachedSearchOne(e, entity, indexName, arguments, nil)
+	found, _ = cachedSearchOne(e, entity, indexName, true, arguments, nil)
+	return found
 }
 
 func (e *Engine) CachedSearchOneWithReferences(entity Entity, indexName string, arguments []interface{}, references []string) (found bool) {
-	return cachedSearchOne(e, entity, indexName, arguments, references)
+	found, _ = cachedSearchOne(e, entity, indexName, true, arguments, references)
+	return found
 }
 
 func (e *Engine) CachedSearch(entities interface{}, indexName string, pager *Pager, arguments ...interface{}) (totalRows int) {

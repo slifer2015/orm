@@ -6,19 +6,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type fastEngineEntity struct {
+	ORM       `orm:"localCache;redisCache"`
+	ID        uint
+	Name      string       `orm:"max=100;unique=FirstIndex"`
+	IndexAll  *CachedQuery `query:""`
+	IndexName *CachedQuery `queryOne:":Name = ?"`
+}
+
 func TestFastEngine(t *testing.T) {
-	var entity *loadByIDEntity
-	var entityRedis *loadByIDRedisEntity
-	var entityNoCache *loadByIDNoCacheEntity
-	var reference *loadByIDReference
-	var subReference *loadByIDSubReference
-	var subReference2 *loadByIDSubReference2
-	engine := PrepareTables(t, &Registry{}, 5, entity, entityRedis, entityNoCache, reference, subReference, subReference2)
-	engine.FlushMany(&loadByIDEntity{Name: "a", ReferenceOne: &loadByIDReference{Name: "r1", ReferenceTwo: &loadByIDSubReference{Name: "s1"}}},
-		&loadByIDEntity{Name: "b", ReferenceOne: &loadByIDReference{Name: "r2", ReferenceTwo: &loadByIDSubReference{Name: "s2"}}},
-		&loadByIDEntity{Name: "c"}, &loadByIDNoCacheEntity{Name: "a"})
-	engine.FlushMany(&loadByIDReference{Name: "rm1", ID: 100}, &loadByIDReference{Name: "rm2", ID: 101}, &loadByIDReference{Name: "rm3", ID: 102})
-	engine.FlushMany(&loadByIDEntity{Name: "eMany", ID: 200, ReferenceMany: []*loadByIDReference{{ID: 100}, {ID: 101}, {ID: 102}}})
+	var entity *fastEngineEntity
+	engine := PrepareTables(t, &Registry{}, 5, entity)
+	engine.FlushMany(&fastEngineEntity{Name: "a"}, &fastEngineEntity{Name: "b"}, &fastEngineEntity{Name: "c"})
 
 	fastEngine := engine.NewFastEngine()
 	has, fastEntity := fastEngine.LoadByID(1, entity)
@@ -27,12 +26,10 @@ func TestFastEngine(t *testing.T) {
 	assert.Equal(t, uint64(1), fastEntity.GetID())
 	assert.Equal(t, "a", fastEntity.Get("Name"))
 	assert.True(t, fastEntity.Is(entity))
-	assert.False(t, fastEntity.Is(entityRedis))
 	assert.PanicsWithError(t, "unknown field Invalid", func() {
 		fastEntity.Get("Invalid")
 	})
-	entity = &loadByIDEntity{}
-	fastEntity.Fill(entity)
+	entity = fastEntity.Entity().(*fastEngineEntity)
 	assert.Equal(t, "a", entity.Name)
 
 	results, missing := fastEngine.LoadByIDs([]uint64{1, 2, 3, 4}, entity)
@@ -68,6 +65,38 @@ func TestFastEngine(t *testing.T) {
 	assert.Equal(t, "a", results[1].Get("Name"))
 
 	found, result := fastEngine.SearchOne(NewWhere("ID = 3 ORDER BY ID DESC"), entity)
+	assert.True(t, found)
+	assert.NotNil(t, result)
+	assert.Equal(t, uint64(3), result.GetID())
+	assert.Equal(t, "c", result.Get("Name"))
+
+	total, results = fastEngine.CachedSearch(entity, "IndexAll", NewPager(1, 10))
+	assert.Equal(t, 3, total)
+	assert.Len(t, results, 3)
+	assert.Equal(t, uint64(1), results[0].GetID())
+	assert.Equal(t, uint64(2), results[1].GetID())
+	assert.Equal(t, uint64(3), results[2].GetID())
+	assert.Equal(t, "a", results[0].Get("Name"))
+	assert.Equal(t, "b", results[1].Get("Name"))
+	assert.Equal(t, "c", results[2].Get("Name"))
+
+	total, results = fastEngine.CachedSearchWithReferences(entity, "IndexAll", NewPager(1, 10), nil, []string{})
+	assert.Equal(t, 3, total)
+	assert.Len(t, results, 3)
+	assert.Equal(t, uint64(1), results[0].GetID())
+	assert.Equal(t, uint64(2), results[1].GetID())
+	assert.Equal(t, uint64(3), results[2].GetID())
+	assert.Equal(t, "a", results[0].Get("Name"))
+	assert.Equal(t, "b", results[1].Get("Name"))
+	assert.Equal(t, "c", results[2].Get("Name"))
+
+	found, result = fastEngine.CachedSearchOne(entity, "IndexName", "b")
+	assert.True(t, found)
+	assert.NotNil(t, result)
+	assert.Equal(t, uint64(2), result.GetID())
+	assert.Equal(t, "b", result.Get("Name"))
+
+	found, result = fastEngine.CachedSearchOneWithReferences(entity, "IndexName", []interface{}{"c"}, []string{})
 	assert.True(t, found)
 	assert.NotNil(t, result)
 	assert.Equal(t, uint64(3), result.GetID())
