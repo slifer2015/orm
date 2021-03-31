@@ -465,7 +465,7 @@ func (e *Engine) Load(entity Entity, references ...string) {
 	if entity.Loaded() {
 		if len(references) > 0 {
 			orm := entity.getORM()
-			warmUpReferences(e, orm.tableSchema, orm.elem, references, false)
+			warmUpReferences(e, true, orm.tableSchema, orm.elem, references, false)
 		}
 		return
 	}

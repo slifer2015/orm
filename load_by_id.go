@@ -28,7 +28,11 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 			e[0] = id
 		}
 		if len(references) > 0 {
-			warmUpReferences(engine, schema, orm.elem, references, false)
+			if orm != nil {
+				warmUpReferences(engine, true, schema, orm.elem, references, false)
+			} else {
+				warmUpReferences(engine, false, schema, e, references, false)
+			}
 		}
 		return true, e, schema
 	}
@@ -54,7 +58,11 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 					data[0] = id
 				}
 				if len(references) > 0 {
-					warmUpReferences(engine, schema, orm.elem, references, false)
+					if orm != nil {
+						warmUpReferences(engine, true, schema, orm.elem, references, false)
+					} else {
+						warmUpReferences(engine, false, schema, data, references, false)
+					}
 				}
 				return true, data, schema
 			}
@@ -75,7 +83,11 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 					decoded[0] = id
 				}
 				if len(references) > 0 {
-					warmUpReferences(engine, schema, orm.elem, references, false)
+					if orm != nil {
+						warmUpReferences(engine, true, schema, orm.elem, references, false)
+					} else {
+						warmUpReferences(engine, false, schema, decoded, references, false)
+					}
 				}
 				return true, decoded, schema
 			}
@@ -102,7 +114,11 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 	}
 
 	if len(references) > 0 {
-		warmUpReferences(engine, schema, orm.elem, references, false)
+		if orm != nil {
+			warmUpReferences(engine, true, schema, orm.elem, references, false)
+		} else {
+			warmUpReferences(engine, false, schema, data, references, false)
+		}
 	} else {
 		data[0] = id
 	}

@@ -267,9 +267,11 @@ func searchRow(skipFakeDelete bool, fillStruct bool, engine *Engine, where *Wher
 	id := pointers[0].(uint64)
 	if fillStruct {
 		fillFromDBRow(id, engine, pointers, entity, true)
-	}
-	if len(references) > 0 {
-		warmUpReferences(engine, schema, entity.getORM().elem, references, false)
+		if len(references) > 0 {
+			warmUpReferences(engine, fillStruct, schema, entity.getORM().elem, references, false)
+		}
+	} else if len(references) > 0 {
+		warmUpReferences(engine, fillStruct, schema, pointers, references, false)
 	}
 	return true, schema, pointers
 }
@@ -319,7 +321,11 @@ func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, wit
 	def()
 	totalRows = getTotalRows(engine, withCount, pager, where, schema, i)
 	if len(references) > 0 && i > 0 {
-		warmUpReferences(engine, schema, val, references, true)
+		if fillStruct {
+			warmUpReferences(engine, true, schema, val, references, true)
+		} else {
+			warmUpReferences(engine, false, schema, fastEntities, references, true)
+		}
 	}
 	if fillStruct {
 		valOrigin.Set(val)

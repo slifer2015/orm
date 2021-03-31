@@ -51,10 +51,15 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 		}
 		if fillStruct {
 			valOrigin.Set(v)
+			if len(references) > 0 && v.Len() > 0 {
+				warmUpReferences(engine, true, schema, entities, references, true)
+			}
+		} else {
+			if len(references) > 0 && len(result) > 0 {
+				warmUpReferences(engine, false, schema, result, references, true)
+			}
 		}
-		if len(references) > 0 && v.Len() > 0 {
-			warmUpReferences(engine, schema, entities, references, true)
-		}
+
 		return
 	}
 
@@ -177,9 +182,13 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 	}
 	if fillStruct {
 		valOrigin.Set(v)
-	}
-	if len(references) > 0 && v.Len() > 0 {
-		warmUpReferences(engine, schema, entities, references, true)
+		if len(references) > 0 && v.Len() > 0 {
+			warmUpReferences(engine, true, schema, entities, references, true)
+		}
+	} else {
+		if len(references) > 0 && len(results) > 0 {
+			warmUpReferences(engine, false, schema, results, references, true)
+		}
 	}
 	return
 }
@@ -218,13 +227,13 @@ func getKeysForNils(engine *Engine, schema *tableSchema, rows map[string]interfa
 	return keys
 }
 
-func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, references []string, many bool) {
+func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows interface{}, references []string, many bool) {
 	dbMap := make(map[string]map[*tableSchema]map[string][]reflect.Value)
 	var localMap map[string]map[string][]reflect.Value
 	var redisMap map[string]map[string][]reflect.Value
 	l := 1
 	if many {
-		l = rows.Len()
+		l = rows.(reflect.Value).Len()
 	}
 	if references[0] == "*" {
 		references = schema.refOne
@@ -274,9 +283,9 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 		for i := 0; i < l; i++ {
 			var ref reflect.Value
 			if many {
-				ref = reflect.Indirect(rows.Index(i).Elem()).FieldByName(refName)
+				ref = reflect.Indirect(rows.(reflect.Value).Index(i).Elem()).FieldByName(refName)
 			} else {
-				ref = rows.FieldByName(refName)
+				ref = rows.(reflect.Value).FieldByName(refName)
 			}
 			if !ref.IsValid() || ref.IsZero() {
 				continue
@@ -411,10 +420,10 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 	for refName, entities := range referencesNextEntities {
 		l := len(entities)
 		if l == 1 {
-			warmUpReferences(engine, entities[0].getORM().tableSchema, reflect.ValueOf(entities[0]).Elem(),
+			warmUpReferences(engine, fillStruct, entities[0].getORM().tableSchema, reflect.ValueOf(entities[0]).Elem(),
 				referencesNextNames[refName], false)
 		} else if l > 1 {
-			warmUpReferences(engine, entities[0].getORM().tableSchema, reflect.ValueOf(entities),
+			warmUpReferences(engine, fillStruct, entities[0].getORM().tableSchema, reflect.ValueOf(entities),
 				referencesNextNames[refName], true)
 		}
 	}
