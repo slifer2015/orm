@@ -187,7 +187,7 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 		}
 	} else {
 		if len(references) > 0 && len(results) > 0 {
-			warmUpReferences(engine, false, schema, results, references, true)
+			warmUpReferences(engine, false, schema, result, references, true)
 		}
 	}
 	return
@@ -318,20 +318,25 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 		} else {
 			for i := 0; i < l; i++ {
 				index := schema.columnMapping[refName]
-				val := rows.([]interface{})[index]
+				var val interface{}
 				if many {
-					// TODO
+					val = rows.([]FastEntity)[i].(*fastEntity).data[index]
 				} else {
-					_, is := val.(FastEntity)
-					if is || val == nil {
-						continue
+					val = rows.([]interface{})[index]
+				}
+				_, is := val.(FastEntity)
+				if is || val == nil {
+					continue
+				}
+				id := val.(uint64)
+				if id > 0 {
+					fastE := &fastEntity{engine: engine, schema: schema}
+					if many {
+						rows.([]FastEntity)[i].(*fastEntity).data[index] = fastE
+					} else {
+						rows.([]interface{})[index] = fastE
 					}
-					id := val.(uint64)
-					if id > 0 {
-						fastEntity := &fastEntity{engine: engine, schema: schema}
-						rows.([]interface{})[index] = fastEntity
-						fillRefMap(engine, id, referencesNextEntities, refName, fastEntity, parentSchema, dbMap, localMap, redisMap)
-					}
+					fillRefMap(engine, id, referencesNextEntities, refName, fastE, parentSchema, dbMap, localMap, redisMap)
 				}
 			}
 		}

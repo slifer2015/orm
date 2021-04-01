@@ -25,9 +25,10 @@ func TestFastEngine(t *testing.T) {
 	var entity *fastEngineEntity
 	var reference *fastEngineReferenceEntity
 	engine := PrepareTables(t, &Registry{}, 5, entity, reference)
+	engine.FlushMany(&fastEngineReferenceEntity{Name: "a1"}, &fastEngineReferenceEntity{Name: "a2"})
 	engine.FlushMany(
-		&fastEngineEntity{Name: "a", Reference: &fastEngineReferenceEntity{Name: "a1"}},
-		&fastEngineEntity{Name: "b", Reference: &fastEngineReferenceEntity{Name: "b1"}},
+		&fastEngineEntity{Name: "a", Reference: &fastEngineReferenceEntity{ID: 1}},
+		&fastEngineEntity{Name: "b", Reference: &fastEngineReferenceEntity{ID: 2}},
 		&fastEngineEntity{Name: "c"})
 
 	fastEngine := engine.NewFastEngine()
@@ -75,19 +76,24 @@ func TestFastEngine(t *testing.T) {
 	assert.Equal(t, "b", results[1].Get("Name"))
 	assert.Equal(t, "c", results[2].Get("Name"))
 
-	//results, missing = fastEngine.LoadByIDs([]uint64{1, 2, 3, 4}, entity, "Reference")
-	//assert.NotNil(t, results)
-	//assert.NotNil(t, missing)
-	//assert.Len(t, results, 3)
-	//assert.Len(t, missing, 1)
-	//assert.Equal(t, uint64(4), missing[0])
-	//assert.Equal(t, uint64(1), results[0].GetID())
-	//assert.Equal(t, uint64(2), results[1].GetID())
-	//assert.Equal(t, uint64(3), results[2].GetID())
-	//assert.Equal(t, "a", results[0].Get("Name"))
-	//assert.Equal(t, "b", results[1].Get("Name"))
-	//assert.Equal(t, "c", results[2].Get("Name"))
-	//assert.NotNil(t, results[0].Get("Reference"))
+	results, missing = fastEngine.LoadByIDs([]uint64{1, 2, 3, 4}, entity, "Reference")
+	assert.NotNil(t, results)
+	assert.NotNil(t, missing)
+	assert.Len(t, results, 3)
+	assert.Len(t, missing, 1)
+	assert.Equal(t, uint64(4), missing[0])
+	assert.Equal(t, uint64(1), results[0].GetID())
+	assert.Equal(t, uint64(2), results[1].GetID())
+	assert.Equal(t, uint64(3), results[2].GetID())
+	assert.Equal(t, "a", results[0].Get("Name"))
+	assert.Equal(t, "b", results[1].Get("Name"))
+	assert.Equal(t, "c", results[2].Get("Name"))
+	assert.NotNil(t, results[0].Get("Reference"))
+	assert.Equal(t, uint64(1), results[0].Get("Reference").(FastEntity).GetID())
+	assert.Equal(t, "a1", results[0].Get("Reference").(FastEntity).Get("Name"))
+	assert.Equal(t, uint64(2), results[1].Get("Reference").(FastEntity).GetID())
+	assert.Equal(t, "a2", results[1].Get("Reference").(FastEntity).Get("Name"))
+	assert.Nil(t, results[2].Get("Reference"))
 
 	results = fastEngine.Search(NewWhere("ID < 50 ORDER BY ID DESC"), NewPager(1, 10), entity)
 	assert.NotNil(t, results)
