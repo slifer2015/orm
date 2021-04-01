@@ -52,7 +52,7 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 		if fillStruct {
 			valOrigin.Set(v)
 			if len(references) > 0 && v.Len() > 0 {
-				warmUpReferences(engine, true, schema, entities, references, true)
+				warmUpReferences(engine, true, schema, entities.Interface(), references, true)
 			}
 		} else {
 			if len(references) > 0 && len(result) > 0 {
@@ -228,18 +228,22 @@ func getKeysForNils(engine *Engine, schema *tableSchema, rows map[string]interfa
 }
 
 func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows interface{}, references []string, many bool) {
-	dbMap := make(map[string]map[*tableSchema]map[string][]reflect.Value)
-	var localMap map[string]map[string][]reflect.Value
-	var redisMap map[string]map[string][]reflect.Value
+	dbMap := make(map[string]map[*tableSchema]map[string][]interface{})
+	var localMap map[string]map[string][]interface{}
+	var redisMap map[string]map[string][]interface{}
 	l := 1
 	if many {
-		l = rows.(reflect.Value).Len()
+		if fillStruct {
+			l = rows.(reflect.Value).Len()
+		} else {
+			l = len(rows.([]FastEntity))
+		}
 	}
 	if references[0] == "*" {
 		references = schema.refOne
 	}
 	var referencesNextNames map[string][]string
-	var referencesNextEntities map[string][]Entity
+	var referencesNextEntities map[string][]interface{}
 	for _, ref := range references {
 		refName := ref
 		pos := strings.Index(refName, "/")
@@ -248,7 +252,7 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 				referencesNextNames = make(map[string][]string)
 			}
 			if referencesNextEntities == nil {
-				referencesNextEntities = make(map[string][]Entity)
+				referencesNextEntities = make(map[string][]interface{})
 			}
 			nextRef := refName[pos+1:]
 			refName = refName[0:pos]
@@ -274,29 +278,61 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 			hasLocalCache = true
 		}
 		if hasLocalCache && localMap == nil {
-			localMap = make(map[string]map[string][]reflect.Value)
+			localMap = make(map[string]map[string][]interface{})
 		}
 		if parentSchema.hasRedisCache && redisMap == nil {
-			redisMap = make(map[string]map[string][]reflect.Value)
+			redisMap = make(map[string]map[string][]interface{})
 		}
-
-		for i := 0; i < l; i++ {
-			var ref reflect.Value
-			if many {
-				ref = reflect.Indirect(rows.(reflect.Value).Index(i).Elem()).FieldByName(refName)
-			} else {
-				ref = rows.(reflect.Value).FieldByName(refName)
-			}
-			if !ref.IsValid() || ref.IsZero() {
-				continue
-			}
-			if manyRef {
-				length := ref.Len()
-				for i := 0; i < length; i++ {
-					fillRefMap(engine, referencesNextEntities, refName, ref.Index(i), parentSchema, dbMap, localMap, redisMap)
+		if fillStruct {
+			for i := 0; i < l; i++ {
+				var ref reflect.Value
+				if many {
+					ref = reflect.Indirect(rows.(reflect.Value).Index(i).Elem()).FieldByName(refName)
+				} else {
+					ref = rows.(reflect.Value).FieldByName(refName)
 				}
-			} else {
-				fillRefMap(engine, referencesNextEntities, refName, ref, parentSchema, dbMap, localMap, redisMap)
+				if !ref.IsValid() || ref.IsZero() {
+					continue
+				}
+				if manyRef {
+					length := ref.Len()
+					for i := 0; i < length; i++ {
+						e := ref.Index(i).Interface().(Entity)
+						if !e.Loaded() {
+							id := e.GetID()
+							if id > 0 {
+								fillRefMap(engine, id, referencesNextEntities, refName, e, parentSchema, dbMap, localMap, redisMap)
+							}
+						}
+					}
+				} else {
+					e := ref.Interface().(Entity)
+					if !e.Loaded() {
+						id := e.GetID()
+						if id > 0 {
+							fillRefMap(engine, id, referencesNextEntities, refName, e, parentSchema, dbMap, localMap, redisMap)
+						}
+					}
+				}
+			}
+		} else {
+			for i := 0; i < l; i++ {
+				index := schema.columnMapping[refName]
+				val := rows.([]interface{})[index]
+				if many {
+					// TODO
+				} else {
+					_, is := val.(FastEntity)
+					if is || val == nil {
+						continue
+					}
+					id := val.(uint64)
+					if id > 0 {
+						fastEntity := &fastEntity{engine: engine, schema: schema}
+						rows.([]interface{})[index] = fastEntity
+						fillRefMap(engine, id, referencesNextEntities, refName, fastEntity, parentSchema, dbMap, localMap, redisMap)
+					}
+				}
 			}
 		}
 	}
@@ -312,7 +348,11 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 			if has && fromCache != "nil" {
 				data := fromCache.([]interface{})
 				for _, r := range v[key] {
-					fillFromDBRow(data[0].(uint64), engine, data, r.Interface().(Entity), false)
+					if fillStruct {
+						fillFromDBRow(data[0].(uint64), engine, data, r.(Entity), false)
+					} else {
+						r.(*fastEntity).data = data
+					}
 				}
 				fillRef(key, localMap, redisMap, dbMap)
 			}
@@ -327,7 +367,11 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 				if fromCache != nil {
 					data := fromCache.([]interface{})
 					for _, r := range v[key] {
-						fillFromDBRow(data[0].(uint64), engine, data, r.Interface().(Entity), false)
+						if fillStruct {
+							fillFromDBRow(data[0].(uint64), engine, data, r.(Entity), false)
+						} else {
+							r.(*fastEntity).data = data
+						}
 					}
 					fillRef(key, localMap, redisMap, dbMap)
 				}
@@ -347,12 +391,16 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 		}
 		for key, fromCache := range engine.GetRedis(k).MGet(keys...) {
 			if fromCache != nil {
-				schema := v[key][0].Interface().(Entity).getORM().tableSchema
+				schema := v[key][0].(Entity).getORM().tableSchema
 				decoded := make([]interface{}, len(schema.columnNames))
 				_ = jsoniter.ConfigFastest.Unmarshal([]byte(fromCache.(string)), &decoded)
 				convertDataFromJSON(schema.fields, 0, decoded)
 				for _, r := range v[key] {
-					fillFromDBRow(decoded[0].(uint64), engine, decoded, r.Interface().(Entity), false)
+					if fillStruct {
+						fillFromDBRow(decoded[0].(uint64), engine, decoded, r.(Entity), false)
+					} else {
+						r.(*fastEntity).data = decoded
+					}
 				}
 				fillRef(key, nil, redisMap, dbMap)
 			}
@@ -379,8 +427,14 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 				results.Scan(pointers...)
 				convertScan(schema.fields, 0, pointers)
 				id := pointers[0].(uint64)
-				for _, r := range v2[schema.getCacheKey(id)] {
-					fillFromDBRow(id, engine, pointers, r.Interface().(Entity), false)
+				if fillStruct {
+					for _, r := range v2[schema.getCacheKey(id)] {
+						fillFromDBRow(id, engine, pointers, r.(Entity), false)
+					}
+				} else {
+					for _, r := range v2[schema.getCacheKey(id)] {
+						r.(*fastEntity).data = pointers
+					}
 				}
 			}
 			def()
@@ -391,12 +445,23 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 			continue
 		}
 		values := make([]interface{}, 0)
-		for cacheKey, refs := range v {
-			e := refs[0].Interface().(Entity)
-			if e.Loaded() {
-				values = append(values, cacheKey, buildRedisValue(e.getORM().dBData))
-			} else {
-				values = append(values, cacheKey, "nil")
+		if fillStruct {
+			for cacheKey, refs := range v {
+				e := refs[0].(Entity)
+				if e.Loaded() {
+					values = append(values, cacheKey, buildRedisValue(e.getORM().dBData))
+				} else {
+					values = append(values, cacheKey, "nil")
+				}
+			}
+		} else {
+			for cacheKey, refs := range v {
+				e := refs[0].(*fastEntity)
+				if e.data != nil {
+					values = append(values, cacheKey, buildRedisValue(e.data))
+				} else {
+					values = append(values, cacheKey, "nil")
+				}
 			}
 		}
 		engine.GetRedis(pool).MSet(values...)
@@ -406,31 +471,55 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 			continue
 		}
 		values := make([]interface{}, 0)
-		for cacheKey, refs := range v {
-			e := refs[0].Interface().(Entity)
-			if e.Loaded() {
-				values = append(values, cacheKey, buildLocalCacheValue(e.getORM().dBData))
-			} else {
-				values = append(values, cacheKey, "nil")
+		if fillStruct {
+			for cacheKey, refs := range v {
+				e := refs[0].(Entity)
+				if e.Loaded() {
+					values = append(values, cacheKey, buildLocalCacheValue(e.getORM().dBData))
+				} else {
+					values = append(values, cacheKey, "nil")
+				}
+			}
+		} else {
+			for cacheKey, refs := range v {
+				e := refs[0].(*fastEntity)
+				if e.data != nil {
+					values = append(values, cacheKey, buildLocalCacheValue(e.data))
+				} else {
+					values = append(values, cacheKey, "nil")
+				}
 			}
 		}
 		engine.GetLocalCache(pool).MSet(values...)
 	}
 
-	for refName, entities := range referencesNextEntities {
-		l := len(entities)
-		if l == 1 {
-			warmUpReferences(engine, fillStruct, entities[0].getORM().tableSchema, reflect.ValueOf(entities[0]).Elem(),
-				referencesNextNames[refName], false)
-		} else if l > 1 {
-			warmUpReferences(engine, fillStruct, entities[0].getORM().tableSchema, reflect.ValueOf(entities),
-				referencesNextNames[refName], true)
+	if fillStruct {
+		for refName, entities := range referencesNextEntities {
+			l := len(entities)
+			if l == 1 {
+				warmUpReferences(engine, fillStruct, entities[0].(Entity).getORM().tableSchema, reflect.ValueOf(entities[0]).Elem(),
+					referencesNextNames[refName], false)
+			} else if l > 1 {
+				warmUpReferences(engine, fillStruct, entities[0].(Entity).getORM().tableSchema, reflect.ValueOf(entities),
+					referencesNextNames[refName], true)
+			}
+		}
+	} else {
+		for refName, entities := range referencesNextEntities {
+			l := len(entities)
+			if l == 1 {
+				warmUpReferences(engine, fillStruct, entities[0].(*fastEntity).schema, reflect.ValueOf(entities[0]).Elem(),
+					referencesNextNames[refName], false)
+			} else if l > 1 {
+				warmUpReferences(engine, fillStruct, entities[0].(*fastEntity).schema, reflect.ValueOf(entities),
+					referencesNextNames[refName], true)
+			}
 		}
 	}
 }
 
-func fillRef(key string, localMap map[string]map[string][]reflect.Value,
-	redisMap map[string]map[string][]reflect.Value, dbMap map[string]map[*tableSchema]map[string][]reflect.Value) {
+func fillRef(key string, localMap map[string]map[string][]interface{},
+	redisMap map[string]map[string][]interface{}, dbMap map[string]map[*tableSchema]map[string][]interface{}) {
 	for _, p := range localMap {
 		delete(p, key)
 	}
@@ -444,43 +533,37 @@ func fillRef(key string, localMap map[string]map[string][]reflect.Value,
 	}
 }
 
-func fillRefMap(engine *Engine, referencesNextEntities map[string][]Entity, refName string, v reflect.Value, parentSchema *tableSchema,
-	dbMap map[string]map[*tableSchema]map[string][]reflect.Value,
-	localMap map[string]map[string][]reflect.Value, redisMap map[string]map[string][]reflect.Value) {
-	e := v.Interface().(Entity)
-	if !e.Loaded() {
-		id := e.GetID()
-		if id > 0 {
-			_, has := referencesNextEntities[refName]
-			if has {
-				referencesNextEntities[refName] = append(referencesNextEntities[refName], e)
-			}
-			cacheKey := parentSchema.getCacheKey(id)
-			if dbMap[parentSchema.mysqlPoolName] == nil {
-				dbMap[parentSchema.mysqlPoolName] = make(map[*tableSchema]map[string][]reflect.Value)
-			}
-			if dbMap[parentSchema.mysqlPoolName][parentSchema] == nil {
-				dbMap[parentSchema.mysqlPoolName][parentSchema] = make(map[string][]reflect.Value)
-			}
-			dbMap[parentSchema.mysqlPoolName][parentSchema][cacheKey] = append(dbMap[parentSchema.mysqlPoolName][parentSchema][cacheKey], v)
-			hasLocalCache := parentSchema.hasLocalCache
-			localCacheName := parentSchema.localCacheName
-			if !hasLocalCache && engine.hasRequestCache {
-				hasLocalCache = true
-				localCacheName = requestCacheKey
-			}
-			if hasLocalCache {
-				if localMap[localCacheName] == nil {
-					localMap[localCacheName] = make(map[string][]reflect.Value)
-				}
-				localMap[localCacheName][cacheKey] = append(localMap[localCacheName][cacheKey], v)
-			}
-			if parentSchema.hasRedisCache {
-				if redisMap[parentSchema.redisCacheName] == nil {
-					redisMap[parentSchema.redisCacheName] = make(map[string][]reflect.Value)
-				}
-				redisMap[parentSchema.redisCacheName][cacheKey] = append(redisMap[parentSchema.redisCacheName][cacheKey], v)
-			}
+func fillRefMap(engine *Engine, id uint64, referencesNextEntities map[string][]interface{}, refName string, v interface{}, parentSchema *tableSchema,
+	dbMap map[string]map[*tableSchema]map[string][]interface{},
+	localMap map[string]map[string][]interface{}, redisMap map[string]map[string][]interface{}) {
+	_, has := referencesNextEntities[refName]
+	if has {
+		referencesNextEntities[refName] = append(referencesNextEntities[refName], v)
+	}
+	cacheKey := parentSchema.getCacheKey(id)
+	if dbMap[parentSchema.mysqlPoolName] == nil {
+		dbMap[parentSchema.mysqlPoolName] = make(map[*tableSchema]map[string][]interface{})
+	}
+	if dbMap[parentSchema.mysqlPoolName][parentSchema] == nil {
+		dbMap[parentSchema.mysqlPoolName][parentSchema] = make(map[string][]interface{})
+	}
+	dbMap[parentSchema.mysqlPoolName][parentSchema][cacheKey] = append(dbMap[parentSchema.mysqlPoolName][parentSchema][cacheKey], v)
+	hasLocalCache := parentSchema.hasLocalCache
+	localCacheName := parentSchema.localCacheName
+	if !hasLocalCache && engine.hasRequestCache {
+		hasLocalCache = true
+		localCacheName = requestCacheKey
+	}
+	if hasLocalCache {
+		if localMap[localCacheName] == nil {
+			localMap[localCacheName] = make(map[string][]interface{})
 		}
+		localMap[localCacheName][cacheKey] = append(localMap[localCacheName][cacheKey], v)
+	}
+	if parentSchema.hasRedisCache {
+		if redisMap[parentSchema.redisCacheName] == nil {
+			redisMap[parentSchema.redisCacheName] = make(map[string][]interface{})
+		}
+		redisMap[parentSchema.redisCacheName][cacheKey] = append(redisMap[parentSchema.redisCacheName][cacheKey], v)
 	}
 }
