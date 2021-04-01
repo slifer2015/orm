@@ -29,11 +29,11 @@ type fastEngine struct {
 }
 
 func (fe *fastEngine) LoadByID(id uint64, entity Entity, references ...string) (found bool, result FastEntity) {
-	found, data, schema := loadByID(fe.engine, id, entity, false, true, references...)
+	found, result, _ = loadByID(fe.engine, id, entity, false, true, references...)
 	if !found {
 		return false, nil
 	}
-	return found, &fastEntity{data: data, engine: fe.engine, schema: schema}
+	return found, result
 }
 
 func (fe *fastEngine) LoadByIDs(ids []uint64, entity Entity, references ...string) (result []FastEntity, missing []uint64) {

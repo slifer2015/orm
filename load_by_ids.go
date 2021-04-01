@@ -185,10 +185,8 @@ func tryByIDs(engine *Engine, ids []uint64, fillStruct bool, entities reflect.Va
 		if len(references) > 0 && v.Len() > 0 {
 			warmUpReferences(engine, true, schema, entities, references, true)
 		}
-	} else {
-		if len(references) > 0 && len(results) > 0 {
-			warmUpReferences(engine, false, schema, result, references, true)
-		}
+	} else if len(references) > 0 && len(results) > 0 {
+		warmUpReferences(engine, false, schema, result, references, true)
 	}
 	return
 }
@@ -236,7 +234,12 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 		if fillStruct {
 			l = rows.(reflect.Value).Len()
 		} else {
-			l = len(rows.([]FastEntity))
+			asF, is := rows.([]FastEntity)
+			if is {
+				l = len(asF)
+			} else {
+				l = len(rows.([]interface{}))
+			}
 		}
 	}
 	if references[0] == "*" {
@@ -320,9 +323,14 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 				index := schema.columnMapping[refName]
 				var val interface{}
 				if many {
-					val = rows.([]FastEntity)[i].(*fastEntity).data[index]
+					asF, is := rows.([]FastEntity)
+					if is {
+						val = asF[i].(*fastEntity).data[index]
+					} else {
+						val = rows.([]interface{})[i].(*fastEntity).data[index]
+					}
 				} else {
-					val = rows.([]interface{})[index]
+					val = rows.(*fastEntity).data[index]
 				}
 				_, is := val.(FastEntity)
 				if is || val == nil {
@@ -330,11 +338,16 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 				}
 				id := val.(uint64)
 				if id > 0 {
-					fastE := &fastEntity{engine: engine, schema: schema}
+					fastE := &fastEntity{engine: engine, schema: parentSchema}
 					if many {
-						rows.([]FastEntity)[i].(*fastEntity).data[index] = fastE
+						asF, is := rows.([]FastEntity)
+						if is {
+							asF[i].(*fastEntity).data[index] = fastE
+						} else {
+							rows.([]interface{})[i].(*fastEntity).data[index] = fastE
+						}
 					} else {
-						rows.([]interface{})[index] = fastE
+						rows.(*fastEntity).data[index] = fastE
 					}
 					fillRefMap(engine, id, referencesNextEntities, refName, fastE, parentSchema, dbMap, localMap, redisMap)
 				}
@@ -513,10 +526,10 @@ func warmUpReferences(engine *Engine, fillStruct bool, schema *tableSchema, rows
 		for refName, entities := range referencesNextEntities {
 			l := len(entities)
 			if l == 1 {
-				warmUpReferences(engine, fillStruct, entities[0].(*fastEntity).schema, reflect.ValueOf(entities[0]).Elem(),
+				warmUpReferences(engine, fillStruct, entities[0].(*fastEntity).schema, entities[0],
 					referencesNextNames[refName], false)
 			} else if l > 1 {
-				warmUpReferences(engine, fillStruct, entities[0].(*fastEntity).schema, reflect.ValueOf(entities),
+				warmUpReferences(engine, fillStruct, entities[0].(*fastEntity).schema, entities,
 					referencesNextNames[refName], true)
 			}
 		}
