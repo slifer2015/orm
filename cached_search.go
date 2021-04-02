@@ -13,7 +13,7 @@ import (
 const idsOnCachePage = 100
 
 func cachedSearch(engine *Engine, entities interface{}, indexName string, pager *Pager,
-	arguments []interface{}, references []string) (totalRows int, ids []uint64) {
+	arguments []interface{}, lazy bool, references []string) (totalRows int, ids []uint64) {
 	value := reflect.ValueOf(entities)
 	entityType, has, name := getEntityTypeForSlice(engine.registry, value.Type())
 	if !has {
@@ -175,7 +175,7 @@ func cachedSearch(engine *Engine, entities interface{}, indexName string, pager 
 	idsToReturn := resultsIDs[sliceStart:sliceEnd]
 	_, is := entities.(Entity)
 	if !is {
-		tryByIDs(engine, idsToReturn, value.Elem(), references)
+		tryByIDs(engine, idsToReturn, value.Elem(), references, lazy)
 	}
 	return totalRows, idsToReturn
 }

@@ -7,7 +7,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, references ...string) (found bool, schema *tableSchema) {
+func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, lazy bool, references ...string) (found bool, schema *tableSchema) {
 	orm := initIfNeeded(engine, entity)
 	schema = orm.tableSchema
 	localCache, hasLocalCache := schema.GetLocalCache(engine)
@@ -17,9 +17,9 @@ func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, reference
 		if e == nil {
 			return false, schema
 		}
-		fillFromDBRow(id, engine, e, entity, false)
+		fillFromDBRow(id, engine, e, entity, false, lazy)
 		if len(references) > 0 {
-			warmUpReferences(engine, schema, orm.elem, references, false)
+			warmUpReferences(engine, schema, orm.elem, references, false, lazy)
 		}
 		return true, schema
 	}
@@ -39,9 +39,9 @@ func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, reference
 					return false, schema
 				}
 				data := e.([]interface{})
-				fillFromDBRow(id, engine, data, entity, false)
+				fillFromDBRow(id, engine, data, entity, false, lazy)
 				if len(references) > 0 {
-					warmUpReferences(engine, schema, orm.elem, references, false)
+					warmUpReferences(engine, schema, orm.elem, references, false, lazy)
 				}
 				return true, schema
 			}
@@ -56,16 +56,16 @@ func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, reference
 				decoded := make([]interface{}, len(schema.columnNames))
 				_ = jsoniter.ConfigFastest.Unmarshal([]byte(row), &decoded)
 				convertDataFromJSON(schema.fields, 0, decoded)
-				fillFromDBRow(id, engine, decoded, entity, false)
+				fillFromDBRow(id, engine, decoded, entity, false, lazy)
 				if len(references) > 0 {
-					warmUpReferences(engine, schema, orm.elem, references, false)
+					warmUpReferences(engine, schema, orm.elem, references, false, lazy)
 				}
 				return true, schema
 			}
 		}
 	}
 
-	found, _, data := searchRow(false, engine, NewWhere("`ID` = ?", id), entity, nil)
+	found, _, data := searchRow(false, engine, NewWhere("`ID` = ?", id), entity, lazy, nil)
 	if !found {
 		if localCache != nil {
 			localCache.Set(cacheKey, "nil")
@@ -85,7 +85,7 @@ func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, reference
 	}
 
 	if len(references) > 0 {
-		warmUpReferences(engine, schema, orm.elem, references, false)
+		warmUpReferences(engine, schema, orm.elem, references, false, lazy)
 	} else {
 		data[0] = id
 	}

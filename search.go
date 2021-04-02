@@ -244,7 +244,7 @@ func convertScan(fields *tableFields, start int, pointers []interface{}) int {
 	return start
 }
 
-func searchRow(skipFakeDelete bool, engine *Engine, where *Where, entity Entity, references []string) (bool, *tableSchema, []interface{}) {
+func searchRow(skipFakeDelete bool, engine *Engine, where *Where, entity Entity, lazy bool, references []string) (bool, *tableSchema, []interface{}) {
 	orm := initIfNeeded(engine, entity)
 	schema := orm.tableSchema
 	whereQuery := where.String()
@@ -265,14 +265,14 @@ func searchRow(skipFakeDelete bool, engine *Engine, where *Where, entity Entity,
 	def()
 	convertScan(schema.fields, 0, pointers)
 	id := pointers[0].(uint64)
-	fillFromDBRow(id, engine, pointers, entity, true)
+	fillFromDBRow(id, engine, pointers, entity, true, lazy)
 	if len(references) > 0 {
-		warmUpReferences(engine, schema, entity.getORM().elem, references, false)
+		warmUpReferences(engine, schema, entity.getORM().elem, references, false, lazy)
 	}
 	return true, schema, pointers
 }
 
-func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, withCount bool, entities reflect.Value, references ...string) (totalRows int) {
+func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, withCount, lazy bool, entities reflect.Value, references ...string) (totalRows int) {
 	if pager == nil {
 		pager = NewPager(1, 50000)
 	}
@@ -303,21 +303,21 @@ func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, wit
 		convertScan(schema.fields, 0, pointers)
 		value := reflect.New(entityType)
 		id := pointers[0].(uint64)
-		fillFromDBRow(id, engine, pointers, value.Interface().(Entity), true)
+		fillFromDBRow(id, engine, pointers, value.Interface().(Entity), true, lazy)
 		val = reflect.Append(val, value)
 		i++
 	}
 	def()
 	totalRows = getTotalRows(engine, withCount, pager, where, schema, i)
 	if len(references) > 0 && i > 0 {
-		warmUpReferences(engine, schema, val, references, true)
+		warmUpReferences(engine, schema, val, references, true, lazy)
 	}
 	valOrigin.Set(val)
 	return totalRows
 }
 
-func searchOne(skipFakeDelete bool, engine *Engine, where *Where, entity Entity, references []string) (bool, *tableSchema, []interface{}) {
-	return searchRow(skipFakeDelete, engine, where, entity, references)
+func searchOne(skipFakeDelete bool, engine *Engine, where *Where, entity Entity, lazy bool, references []string) (bool, *tableSchema, []interface{}) {
+	return searchRow(skipFakeDelete, engine, where, entity, lazy, references)
 }
 
 func searchIDs(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, withCount bool, entityType reflect.Type) (ids []uint64, total int) {
@@ -366,14 +366,17 @@ func getTotalRows(engine *Engine, withCount bool, pager *Pager, where *Where, sc
 	return totalRows
 }
 
-func fillFromDBRow(id uint64, engine *Engine, data []interface{}, entity Entity, fillDataLoader bool) {
+func fillFromDBRow(id uint64, engine *Engine, data []interface{}, entity Entity, fillDataLoader bool, lazy bool) {
 	orm := initIfNeeded(engine, entity)
 	elem := orm.elem
 	orm.idElem.SetUint(id)
 	data[0] = id
-	_ = fillStruct(engine, 0, data, orm.tableSchema.fields, elem)
+	if !lazy {
+		_ = fillStruct(engine, 0, data, orm.tableSchema.fields, elem)
+	}
 	orm.inDB = true
 	orm.loaded = true
+	orm.lazy = lazy
 	orm.dBData = data
 	if !fillDataLoader {
 		return

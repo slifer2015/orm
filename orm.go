@@ -33,6 +33,7 @@ type ORM struct {
 	onDuplicateKeyUpdate map[string]interface{}
 	initialised          bool
 	loaded               bool
+	lazy                 bool
 	inDB                 bool
 	delete               bool
 	fakeDelete           bool
@@ -68,7 +69,7 @@ func (orm *ORM) forceMarkToDelete() {
 }
 
 func (orm *ORM) Loaded() bool {
-	return orm.loaded
+	return orm.loaded && !orm.lazy
 }
 
 func (orm *ORM) SetOnDuplicateKeyUpdate(bind Bind) {

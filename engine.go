@@ -396,11 +396,11 @@ func (e *Engine) GetRegistry() ValidatedRegistry {
 }
 
 func (e *Engine) SearchWithCount(where *Where, pager *Pager, entities interface{}, references ...string) (totalRows int) {
-	return search(true, e, where, pager, true, reflect.ValueOf(entities).Elem(), references...)
+	return search(true, e, where, pager, true, false, reflect.ValueOf(entities).Elem(), references...)
 }
 
 func (e *Engine) Search(where *Where, pager *Pager, entities interface{}, references ...string) {
-	search(true, e, where, pager, false, reflect.ValueOf(entities).Elem(), references...)
+	search(true, e, where, pager, false, false, reflect.ValueOf(entities).Elem(), references...)
 }
 
 func (e *Engine) SearchIDsWithCount(where *Where, pager *Pager, entity Entity) (results []uint64, totalRows int) {
@@ -413,7 +413,7 @@ func (e *Engine) SearchIDs(where *Where, pager *Pager, entity Entity) []uint64 {
 }
 
 func (e *Engine) SearchOne(where *Where, entity Entity, references ...string) (found bool) {
-	found, _, _ = searchOne(true, e, where, entity, references)
+	found, _, _ = searchOne(true, e, where, entity, false, references)
 	return found
 }
 
@@ -428,22 +428,22 @@ func (e *Engine) CachedSearchOneWithReferences(entity Entity, indexName string, 
 }
 
 func (e *Engine) CachedSearch(entities interface{}, indexName string, pager *Pager, arguments ...interface{}) (totalRows int) {
-	total, _ := cachedSearch(e, entities, indexName, pager, arguments, nil)
+	total, _ := cachedSearch(e, entities, indexName, pager, arguments, false, nil)
 	return total
 }
 
 func (e *Engine) CachedSearchIDs(entity Entity, indexName string, pager *Pager, arguments ...interface{}) (totalRows int, ids []uint64) {
-	return cachedSearch(e, entity, indexName, pager, arguments, nil)
+	return cachedSearch(e, entity, indexName, pager, arguments, false, nil)
 }
 
 func (e *Engine) CachedSearchCount(entity Entity, indexName string, arguments ...interface{}) int {
-	total, _ := cachedSearch(e, entity, indexName, NewPager(1, 1), arguments, nil)
+	total, _ := cachedSearch(e, entity, indexName, NewPager(1, 1), arguments, false, nil)
 	return total
 }
 
 func (e *Engine) CachedSearchWithReferences(entities interface{}, indexName string, pager *Pager,
 	arguments []interface{}, references []string) (totalRows int) {
-	total, _ := cachedSearch(e, entities, indexName, pager, arguments, references)
+	total, _ := cachedSearch(e, entities, indexName, pager, arguments, false, references)
 	return total
 }
 
@@ -452,7 +452,12 @@ func (e *Engine) ClearByIDs(entity Entity, ids ...uint64) {
 }
 
 func (e *Engine) LoadByID(id uint64, entity Entity, references ...string) (found bool) {
-	found, _ = loadByID(e, id, entity, true, references...)
+	found, _ = loadByID(e, id, entity, true, false, references...)
+	return found
+}
+
+func (e *Engine) LoadByIDLazy(id uint64, entity Entity, references ...string) (found bool) {
+	found, _ = loadByID(e, id, entity, true, true, references...)
 	return found
 }
 
@@ -460,19 +465,19 @@ func (e *Engine) Load(entity Entity, references ...string) {
 	if entity.Loaded() {
 		if len(references) > 0 {
 			orm := entity.getORM()
-			warmUpReferences(e, orm.tableSchema, orm.elem, references, false)
+			warmUpReferences(e, orm.tableSchema, orm.elem, references, false, false)
 		}
 		return
 	}
 	orm := initIfNeeded(e, entity)
 	id := orm.GetID()
 	if id > 0 {
-		loadByID(e, id, entity, true, references...)
+		loadByID(e, id, entity, true, false, references...)
 	}
 }
 
 func (e *Engine) LoadByIDs(ids []uint64, entities interface{}, references ...string) (missing []uint64) {
-	missing, _ = tryByIDs(e, ids, reflect.ValueOf(entities).Elem(), references)
+	missing, _ = tryByIDs(e, ids, reflect.ValueOf(entities).Elem(), references, false)
 	return missing
 }
 

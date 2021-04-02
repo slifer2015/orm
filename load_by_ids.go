@@ -8,7 +8,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references []string) (missing []uint64, schema *tableSchema) {
+func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references []string, lazy bool) (missing []uint64, schema *tableSchema) {
 	missing = make([]uint64, 0)
 	valOrigin := entities
 	valOrigin.SetLen(0)
@@ -36,13 +36,13 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 			} else {
 				val := reflect.New(schema.t)
 				entity := val.Interface().(Entity)
-				fillFromDBRow(ids[i], engine, row, entity, false)
+				fillFromDBRow(ids[i], engine, row, entity, false, lazy)
 				v = reflect.Append(v, val)
 			}
 		}
 		valOrigin.Set(v)
 		if len(references) > 0 && v.Len() > 0 {
-			warmUpReferences(engine, schema, entities, references, true)
+			warmUpReferences(engine, schema, entities, references, true, lazy)
 		}
 		return
 	}
@@ -69,12 +69,12 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 	if hasLocalCache || hasRedis {
 		if hasLocalCache {
 			resultsLocalCache := localCache.MGet(cacheKeys...)
-			cacheKeys = getKeysForNils(engine, schema, resultsLocalCache, keysMapping, results, false)
+			cacheKeys = getKeysForNils(engine, schema, resultsLocalCache, keysMapping, results, false, lazy)
 			localCacheKeys = cacheKeys
 		}
 		if hasRedis && len(cacheKeys) > 0 {
 			resultsRedis := redisCache.MGet(cacheKeys...)
-			cacheKeys = getKeysForNils(engine, schema, resultsRedis, keysMapping, results, true)
+			cacheKeys = getKeysForNils(engine, schema, resultsRedis, keysMapping, results, true, lazy)
 			redisCacheKeys = cacheKeys
 		}
 		ids = make([]uint64, len(cacheKeys))
@@ -84,7 +84,7 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 	}
 	l := len(ids)
 	if l > 0 {
-		search(false, engine, NewWhere("`ID` IN ?", ids), NewPager(1, l), false, entities)
+		search(false, engine, NewWhere("`ID` IN ?", ids), NewPager(1, l), false, lazy, entities)
 		for i := 0; i < entities.Len(); i++ {
 			e := entities.Index(i).Interface().(Entity)
 			results[schema.getCacheKey(e.GetID())] = e
@@ -146,13 +146,13 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 	}
 	valOrigin.Set(v)
 	if len(references) > 0 && v.Len() > 0 {
-		warmUpReferences(engine, schema, entities, references, true)
+		warmUpReferences(engine, schema, entities, references, true, lazy)
 	}
 	return
 }
 
 func getKeysForNils(engine *Engine, schema *tableSchema, rows map[string]interface{}, keysMapping map[string]uint64,
-	results map[string]Entity, fromRedis bool) []string {
+	results map[string]Entity, fromRedis bool, lazy bool) []string {
 	keys := make([]string, 0)
 	for k, v := range rows {
 		if v == nil {
@@ -165,11 +165,11 @@ func getKeysForNils(engine *Engine, schema *tableSchema, rows map[string]interfa
 				_ = jsoniter.ConfigFastest.Unmarshal([]byte(v.(string)), &decoded)
 				convertDataFromJSON(schema.fields, 0, decoded)
 				entity := reflect.New(schema.t).Interface().(Entity)
-				fillFromDBRow(keysMapping[k], engine, decoded, entity, false)
+				fillFromDBRow(keysMapping[k], engine, decoded, entity, false, lazy)
 				results[k] = entity
 			} else {
 				entity := reflect.New(schema.t).Interface().(Entity)
-				fillFromDBRow(keysMapping[k], engine, v.([]interface{}), entity, false)
+				fillFromDBRow(keysMapping[k], engine, v.([]interface{}), entity, false, lazy)
 				results[k] = entity
 			}
 		}
@@ -177,7 +177,7 @@ func getKeysForNils(engine *Engine, schema *tableSchema, rows map[string]interfa
 	return keys
 }
 
-func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, references []string, many bool) {
+func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, references []string, many bool, lazy bool) {
 	dbMap := make(map[string]map[*tableSchema]map[string][]Entity)
 	var localMap map[string]map[string][]Entity
 	var redisMap map[string]map[string][]Entity
@@ -273,7 +273,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 			if has && fromCache != "nil" {
 				data := fromCache.([]interface{})
 				for _, r := range v[key] {
-					fillFromDBRow(data[0].(uint64), engine, data, r, false)
+					fillFromDBRow(data[0].(uint64), engine, data, r, false, lazy)
 				}
 				fillRef(key, localMap, redisMap, dbMap)
 			}
@@ -288,7 +288,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 				if fromCache != nil {
 					data := fromCache.([]interface{})
 					for _, r := range v[key] {
-						fillFromDBRow(data[0].(uint64), engine, data, r, false)
+						fillFromDBRow(data[0].(uint64), engine, data, r, false, lazy)
 					}
 					fillRef(key, localMap, redisMap, dbMap)
 				}
@@ -313,7 +313,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 				_ = jsoniter.ConfigFastest.Unmarshal([]byte(fromCache.(string)), &decoded)
 				convertDataFromJSON(schema.fields, 0, decoded)
 				for _, r := range v[key] {
-					fillFromDBRow(decoded[0].(uint64), engine, decoded, r, false)
+					fillFromDBRow(decoded[0].(uint64), engine, decoded, r, false, lazy)
 				}
 				fillRef(key, nil, redisMap, dbMap)
 			}
@@ -341,7 +341,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 				convertScan(schema.fields, 0, pointers)
 				id := pointers[0].(uint64)
 				for _, r := range v2[schema.getCacheKey(id)] {
-					fillFromDBRow(id, engine, pointers, r, false)
+					fillFromDBRow(id, engine, pointers, r, false, lazy)
 				}
 			}
 			def()
@@ -382,10 +382,10 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 		l := len(entities)
 		if l == 1 {
 			warmUpReferences(engine, entities[0].getORM().tableSchema, reflect.ValueOf(entities[0]).Elem(),
-				referencesNextNames[refName], false)
+				referencesNextNames[refName], false, lazy)
 		} else if l > 1 {
 			warmUpReferences(engine, entities[0].getORM().tableSchema, reflect.ValueOf(entities),
-				referencesNextNames[refName], true)
+				referencesNextNames[refName], true, lazy)
 		}
 	}
 }
