@@ -19,13 +19,15 @@ type Entity interface {
 	GetID() uint64
 	markToDelete()
 	forceMarkToDelete()
-	Loaded() bool
-	IsLazy() bool
+	IsLoaded() bool
+	IsInitialised() bool
+	Init(engine *Engine)
 	IsDirty() bool
 	GetDirtyBind() (bind Bind, has bool)
 	SetOnDuplicateKeyUpdate(bind Bind)
 	SetEntityLogMeta(key string, value interface{})
 	SetField(field string, value interface{}) error
+	GetFieldLazy(field string) interface{}
 }
 
 type ORM struct {
@@ -55,6 +57,17 @@ func (orm *ORM) GetID() uint64 {
 	return orm.idElem.Uint()
 }
 
+func (orm *ORM) GetFieldLazy(field string) interface{} {
+	if !orm.lazy {
+		panic(fmt.Errorf("entity is not lazy"))
+	}
+	i, has := orm.tableSchema.columnMapping[field]
+	if !has {
+		panic(fmt.Errorf("unknown field %s", field))
+	}
+	return orm.dBData[i]
+}
+
 func (orm *ORM) initDBData() {
 	if orm.dBData == nil {
 		orm.dBData = make([]interface{}, len(orm.tableSchema.columnNames))
@@ -69,12 +82,19 @@ func (orm *ORM) forceMarkToDelete() {
 	orm.delete = true
 }
 
-func (orm *ORM) Loaded() bool {
+func (orm *ORM) IsLoaded() bool {
 	return orm.loaded
 }
 
-func (orm *ORM) IsLazy() bool {
-	return orm.lazy
+func (orm *ORM) IsInitialised() bool {
+	return !orm.lazy
+}
+
+func (orm *ORM) Init(engine *Engine) {
+	if orm.lazy && orm.loaded {
+		fillStruct(engine.registry, 0, orm.dBData, orm.tableSchema.fields, orm.value)
+		orm.lazy = false
+	}
 }
 
 func (orm *ORM) SetOnDuplicateKeyUpdate(bind Bind) {

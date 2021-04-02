@@ -245,7 +245,7 @@ func convertScan(fields *tableFields, start int, pointers []interface{}) int {
 }
 
 func searchRow(skipFakeDelete bool, engine *Engine, where *Where, entity Entity, lazy bool, references []string) (bool, *tableSchema, []interface{}) {
-	orm := initIfNeeded(engine, entity)
+	orm := initIfNeeded(engine.registry, entity)
 	schema := orm.tableSchema
 	whereQuery := where.String()
 	if skipFakeDelete && schema.hasFakeDelete {
@@ -367,12 +367,12 @@ func getTotalRows(engine *Engine, withCount bool, pager *Pager, where *Where, sc
 }
 
 func fillFromDBRow(id uint64, engine *Engine, data []interface{}, entity Entity, fillDataLoader bool, lazy bool) {
-	orm := initIfNeeded(engine, entity)
+	orm := initIfNeeded(engine.registry, entity)
 	elem := orm.elem
 	orm.idElem.SetUint(id)
 	data[0] = id
 	if !lazy {
-		_ = fillStruct(engine, 0, data, orm.tableSchema.fields, elem)
+		_ = fillStruct(engine.registry, 0, data, orm.tableSchema.fields, elem)
 	}
 	orm.inDB = true
 	orm.loaded = true
@@ -387,7 +387,7 @@ func fillFromDBRow(id uint64, engine *Engine, data []interface{}, entity Entity,
 	}
 }
 
-func fillStruct(engine *Engine, index uint16, data []interface{}, fields *tableFields, value reflect.Value) uint16 {
+func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, fields *tableFields, value reflect.Value) uint16 {
 	for _, i := range fields.uintegers {
 		value.Field(i).SetUint(data[index].(uint64))
 		index++
@@ -580,7 +580,7 @@ func fillStruct(engine *Engine, index uint16, data []interface{}, fields *tableF
 		refType := fields.refsTypes[k]
 		if integer > 0 {
 			n := reflect.New(refType.Elem())
-			orm := initIfNeeded(engine, n.Interface().(Entity))
+			orm := initIfNeeded(registry, n.Interface().(Entity))
 			orm.idElem.SetUint(integer)
 			orm.inDB = true
 			field.Set(n)
@@ -603,7 +603,7 @@ func fillStruct(engine *Engine, index uint16, data []interface{}, fields *tableF
 		if f != nil {
 			for i, id := range f {
 				n := reflect.New(refType.Elem())
-				orm := initIfNeeded(engine, n.Interface().(Entity))
+				orm := initIfNeeded(registry, n.Interface().(Entity))
 				orm.idElem.SetUint(id)
 				orm.inDB = true
 				slice.Index(i).Set(n)
@@ -618,7 +618,7 @@ func fillStruct(engine *Engine, index uint16, data []interface{}, fields *tableF
 		field := value.Field(i)
 		newVal := reflect.New(field.Type())
 		value := newVal.Elem()
-		newIndex := fillStruct(engine, index, data, subFields, value)
+		newIndex := fillStruct(registry, index, data, subFields, value)
 		field.Set(value)
 		index = newIndex
 	}

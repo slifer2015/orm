@@ -8,7 +8,7 @@ import (
 )
 
 func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, lazy bool, references ...string) (found bool, schema *tableSchema) {
-	orm := initIfNeeded(engine, entity)
+	orm := initIfNeeded(engine.registry, entity)
 	schema = orm.tableSchema
 	localCache, hasLocalCache := schema.GetLocalCache(engine)
 	redisCache, hasRedis := schema.GetRedisCache(engine)
@@ -41,7 +41,7 @@ func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, lazy bool
 				data := e.([]interface{})
 				fillFromDBRow(id, engine, data, entity, false, lazy)
 				if len(references) > 0 {
-					warmUpReferences(engine, schema, orm.elem, references, false, lazy)
+					warmUpReferences(engine, schema, orm.value, references, false, lazy)
 				}
 				return true, schema
 			}
@@ -103,14 +103,14 @@ func buildLocalCacheValue(data []interface{}) []interface{} {
 	return b
 }
 
-func initIfNeeded(engine *Engine, entity Entity) *ORM {
+func initIfNeeded(registry *validatedRegistry, entity Entity) *ORM {
 	orm := entity.getORM()
 	if !orm.initialised {
 		orm.initialised = true
 		value := reflect.ValueOf(entity)
 		elem := value.Elem()
 		t := elem.Type()
-		tableSchema := getTableSchema(engine.registry, t)
+		tableSchema := getTableSchema(registry, t)
 		if tableSchema == nil {
 			panic(fmt.Errorf("entity '%s' is not registered", t.String()))
 		}

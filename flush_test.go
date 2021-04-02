@@ -151,16 +151,16 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	flusher := engine.NewFlusher().Track(entity)
 	flusher.Flush()
 	flusher.Flush()
-	assert.True(t, entity.Loaded())
-	assert.True(t, entity.ReferenceOne.Loaded())
+	assert.True(t, entity.IsLoaded())
+	assert.True(t, entity.ReferenceOne.IsLoaded())
 	assert.False(t, entity.IsDirty())
 	assert.False(t, entity.ReferenceOne.IsDirty())
 	assert.Equal(t, uint(1), entity.ID)
 	assert.NotEqual(t, uint(0), entity.ReferenceOne.ID)
-	assert.True(t, entity.Loaded())
-	assert.True(t, entity.ReferenceOne.Loaded())
+	assert.True(t, entity.IsLoaded())
+	assert.True(t, entity.ReferenceOne.IsLoaded())
 	assert.NotEqual(t, uint(0), entity.ReferenceMany[0].ID)
-	assert.True(t, entity.ReferenceMany[0].Loaded())
+	assert.True(t, entity.ReferenceMany[0].IsLoaded())
 	refOneID := entity.ReferenceOne.ID
 	refManyID := entity.ReferenceMany[0].ID
 
@@ -190,8 +190,8 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	assert.Nil(t, entity.FloatNullable)
 	assert.Nil(t, entity.Float32Nullable)
 	assert.False(t, entity.IsDirty())
-	assert.True(t, entity.Loaded())
-	assert.False(t, entity.ReferenceOne.Loaded())
+	assert.True(t, entity.IsLoaded())
+	assert.False(t, entity.ReferenceOne.IsLoaded())
 	assert.Equal(t, refOneID, entity.ReferenceOne.ID)
 	assert.Nil(t, entity.Blob)
 	assert.Nil(t, entity.Int8Nullable)
@@ -283,7 +283,7 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	assert.Nil(t, entity.ReferenceMany)
 	assert.False(t, entity.IsDirty())
 	assert.False(t, reference.IsDirty())
-	assert.True(t, reference.Loaded())
+	assert.True(t, reference.IsLoaded())
 
 	entity.ReferenceMany = []*flushEntityReference{}
 	assert.False(t, entity.IsDirty())

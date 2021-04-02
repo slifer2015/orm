@@ -1,7 +1,7 @@
 package orm
 
 func clearByIDs(engine *Engine, entity Entity, ids ...uint64) {
-	schema := initIfNeeded(engine, entity).tableSchema
+	schema := initIfNeeded(engine.registry, entity).tableSchema
 	cacheKeys := make([]string, len(ids))
 	for i, id := range ids {
 		cacheKeys[i] = schema.getCacheKey(id)

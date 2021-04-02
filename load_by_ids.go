@@ -231,19 +231,38 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 		}
 		for i := 0; i < l; i++ {
 			var ref reflect.Value
+			var refEntity reflect.Value
 			if many {
-				ref = reflect.Indirect(rows.Index(i).Elem()).FieldByName(refName)
+				refEntity = rows.Index(i).Elem()
+				ref = reflect.Indirect(refEntity).FieldByName(refName)
 			} else {
-				ref = rows.FieldByName(refName)
+				refEntity = rows
+				ref = reflect.Indirect(refEntity).FieldByName(refName)
 			}
 			if !ref.IsValid() || ref.IsZero() {
-				continue
+				if !lazy {
+					continue
+				}
+				dbData := refEntity.Interface().(Entity).getORM().dBData
+				idVal := dbData[schema.columnMapping[refName]]
+				if idVal == nil {
+					continue
+				}
+				id := idVal.(uint64)
+				if id == 0 {
+					continue
+				}
+				n := reflect.New(ref.Type().Elem())
+				orm := initIfNeeded(engine.registry, n.Interface().(Entity))
+				orm.idElem.SetUint(id)
+				orm.inDB = true
+				ref.Set(n)
 			}
 			if manyRef {
 				length := ref.Len()
 				for i := 0; i < length; i++ {
 					e := ref.Index(i).Interface().(Entity)
-					if !e.Loaded() {
+					if !e.IsLoaded() {
 						id := e.GetID()
 						if id > 0 {
 							fillRefMap(engine, id, referencesNextEntities, refName, e, parentSchema, dbMap, localMap, redisMap)
@@ -252,7 +271,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 				}
 			} else {
 				e := ref.Interface().(Entity)
-				if !e.Loaded() {
+				if !e.IsLoaded() {
 					id := e.GetID()
 					if id > 0 {
 						fillRefMap(engine, id, referencesNextEntities, refName, e, parentSchema, dbMap, localMap, redisMap)
@@ -354,7 +373,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 		values := make([]interface{}, 0)
 		for cacheKey, refs := range v {
 			e := refs[0].(Entity)
-			if e.Loaded() {
+			if e.IsLoaded() {
 				values = append(values, cacheKey, buildRedisValue(e.getORM().dBData))
 			} else {
 				values = append(values, cacheKey, "nil")
@@ -369,7 +388,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 		values := make([]interface{}, 0)
 		for cacheKey, refs := range v {
 			e := refs[0].(Entity)
-			if e.Loaded() {
+			if e.IsLoaded() {
 				values = append(values, cacheKey, buildLocalCacheValue(e.getORM().dBData))
 			} else {
 				values = append(values, cacheKey, "nil")
@@ -381,7 +400,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 	for refName, entities := range referencesNextEntities {
 		l := len(entities)
 		if l == 1 {
-			warmUpReferences(engine, entities[0].getORM().tableSchema, reflect.ValueOf(entities[0]).Elem(),
+			warmUpReferences(engine, entities[0].getORM().tableSchema, reflect.ValueOf(entities[0]),
 				referencesNextNames[refName], false, lazy)
 		} else if l > 1 {
 			warmUpReferences(engine, entities[0].getORM().tableSchema, reflect.ValueOf(entities),

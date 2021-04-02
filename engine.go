@@ -462,14 +462,14 @@ func (e *Engine) LoadByIDLazy(id uint64, entity Entity, references ...string) (f
 }
 
 func (e *Engine) Load(entity Entity, references ...string) {
-	if entity.Loaded() {
+	if entity.IsLoaded() {
 		if len(references) > 0 {
 			orm := entity.getORM()
 			warmUpReferences(e, orm.tableSchema, orm.elem, references, false, false)
 		}
 		return
 	}
-	orm := initIfNeeded(e, entity)
+	orm := initIfNeeded(e.registry, entity)
 	id := orm.GetID()
 	if id > 0 {
 		loadByID(e, id, entity, true, false, references...)

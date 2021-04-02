@@ -67,7 +67,7 @@ func (f *flusher) Track(entity ...Entity) Flusher {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 	for _, entity := range entity {
-		initIfNeeded(f.engine, entity)
+		initIfNeeded(f.engine.registry, entity)
 		if f.trackedEntities == nil {
 			f.trackedEntities = []Entity{entity}
 		} else {
@@ -233,7 +233,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 	var referencesToFlash map[Entity]Entity
 
 	for _, entity := range entities {
-		initIfNeeded(f.engine, entity).initDBData()
+		initIfNeeded(f.engine.registry, entity).initDBData()
 		schema := entity.getORM().tableSchema
 		if !isInTransaction && schema.GetMysql(f.engine).inTransaction {
 			isInTransaction = true
@@ -242,7 +242,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			refValue := entity.getORM().elem.FieldByName(refName)
 			if refValue.IsValid() && !refValue.IsNil() {
 				refEntity := refValue.Interface().(Entity)
-				initIfNeeded(f.engine, refEntity).initDBData()
+				initIfNeeded(f.engine.registry, refEntity).initDBData()
 				if refEntity.GetID() == 0 {
 					if referencesToFlash == nil {
 						referencesToFlash = make(map[Entity]Entity)
@@ -257,7 +257,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 				length := refValue.Len()
 				for i := 0; i < length; i++ {
 					refEntity := refValue.Index(i).Interface().(Entity)
-					initIfNeeded(f.engine, refEntity)
+					initIfNeeded(f.engine.registry, refEntity)
 					if refEntity.GetID() == 0 {
 						if referencesToFlash == nil {
 							referencesToFlash = make(map[Entity]Entity)
@@ -392,7 +392,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 			insertReflectValues[t] = append(insertReflectValues[t], entity)
 			insertBinds[t] = append(insertBinds[t], bind)
 		} else {
-			if !entity.Loaded() {
+			if !entity.IsLoaded() {
 				panic(fmt.Errorf("entity is not loaded and can't be updated: %v [%d]", entity.getORM().elem.Type().String(), currentID))
 			}
 			/* #nosec */
