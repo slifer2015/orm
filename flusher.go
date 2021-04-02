@@ -344,7 +344,7 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 							checkError(err)
 						}
 						bind, _ := orm.GetDirtyBind()
-						_, _, _ = loadByID(f.engine, lastID, entity, true, false)
+						_, _ = loadByID(f.engine, lastID, entity, false)
 						f.updateCacheAfterUpdate(dbData, entity, bind, schema, lastID, false)
 					}
 				} else {

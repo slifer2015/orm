@@ -326,10 +326,6 @@ func (e *Engine) NewFlusher() Flusher {
 	return &flusher{engine: e}
 }
 
-func (e *Engine) NewFastEngine() FastEngine {
-	return &fastEngine{engine: e}
-}
-
 func (e *Engine) NewRedisFlusher() RedisFlusher {
 	return &redisFlusher{engine: e}
 }
@@ -400,12 +396,11 @@ func (e *Engine) GetRegistry() ValidatedRegistry {
 }
 
 func (e *Engine) SearchWithCount(where *Where, pager *Pager, entities interface{}, references ...string) (totalRows int) {
-	totalRows, _ = search(true, e, where, pager, true, true, reflect.ValueOf(entities).Elem(), references...)
-	return totalRows
+	return search(true, e, where, pager, true, reflect.ValueOf(entities).Elem(), references...)
 }
 
 func (e *Engine) Search(where *Where, pager *Pager, entities interface{}, references ...string) {
-	search(true, e, where, pager, false, true, reflect.ValueOf(entities).Elem(), references...)
+	search(true, e, where, pager, false, reflect.ValueOf(entities).Elem(), references...)
 }
 
 func (e *Engine) SearchIDsWithCount(where *Where, pager *Pager, entity Entity) (results []uint64, totalRows int) {
@@ -418,7 +413,7 @@ func (e *Engine) SearchIDs(where *Where, pager *Pager, entity Entity) []uint64 {
 }
 
 func (e *Engine) SearchOne(where *Where, entity Entity, references ...string) (found bool) {
-	found, _, _ = searchOne(true, true, e, where, entity, references)
+	found, _, _ = searchOne(true, e, where, entity, references)
 	return found
 }
 
@@ -457,7 +452,7 @@ func (e *Engine) ClearByIDs(entity Entity, ids ...uint64) {
 }
 
 func (e *Engine) LoadByID(id uint64, entity Entity, references ...string) (found bool) {
-	found, _, _ = loadByID(e, id, entity, true, true, references...)
+	found, _ = loadByID(e, id, entity, true, references...)
 	return found
 }
 
@@ -465,19 +460,19 @@ func (e *Engine) Load(entity Entity, references ...string) {
 	if entity.Loaded() {
 		if len(references) > 0 {
 			orm := entity.getORM()
-			warmUpReferences(e, true, orm.tableSchema, orm.elem, references, false)
+			warmUpReferences(e, orm.tableSchema, orm.elem, references, false)
 		}
 		return
 	}
 	orm := initIfNeeded(e, entity)
 	id := orm.GetID()
 	if id > 0 {
-		loadByID(e, id, entity, true, true, references...)
+		loadByID(e, id, entity, true, references...)
 	}
 }
 
 func (e *Engine) LoadByIDs(ids []uint64, entities interface{}, references ...string) (missing []uint64) {
-	missing, _, _ = tryByIDs(e, ids, true, reflect.ValueOf(entities).Elem(), references)
+	missing, _ = tryByIDs(e, ids, reflect.ValueOf(entities).Elem(), references)
 	return missing
 }
 

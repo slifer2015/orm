@@ -244,7 +244,7 @@ func convertScan(fields *tableFields, start int, pointers []interface{}) int {
 	return start
 }
 
-func searchRow(skipFakeDelete bool, fillStruct bool, engine *Engine, where *Where, entity Entity, references []string) (bool, *tableSchema, []interface{}) {
+func searchRow(skipFakeDelete bool, engine *Engine, where *Where, entity Entity, references []string) (bool, *tableSchema, []interface{}) {
 	orm := initIfNeeded(engine, entity)
 	schema := orm.tableSchema
 	whereQuery := where.String()
@@ -265,25 +265,18 @@ func searchRow(skipFakeDelete bool, fillStruct bool, engine *Engine, where *Wher
 	def()
 	convertScan(schema.fields, 0, pointers)
 	id := pointers[0].(uint64)
-	if fillStruct {
-		fillFromDBRow(id, engine, pointers, entity, true)
-		if len(references) > 0 {
-			warmUpReferences(engine, fillStruct, schema, entity.getORM().elem, references, false)
-		}
-	} else if len(references) > 0 {
-		warmUpReferences(engine, fillStruct, schema, pointers, references, false)
+	fillFromDBRow(id, engine, pointers, entity, true)
+	if len(references) > 0 {
+		warmUpReferences(engine, schema, entity.getORM().elem, references, false)
 	}
 	return true, schema, pointers
 }
 
-func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, withCount bool,
-	fillStruct bool, entities reflect.Value, references ...string) (totalRows int, fastEntities []FastEntity) {
+func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, withCount bool, entities reflect.Value, references ...string) (totalRows int) {
 	if pager == nil {
 		pager = NewPager(1, 50000)
 	}
-	if fillStruct {
-		entities.SetLen(0)
-	}
+	entities.SetLen(0)
 	entityType, has, name := getEntityTypeForSlice(engine.registry, entities.Type())
 	if !has {
 		panic(fmt.Errorf("entity '%s' is not registered", name))
@@ -308,33 +301,23 @@ func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, wit
 		pointers := prepareScan(schema)
 		results.Scan(pointers...)
 		convertScan(schema.fields, 0, pointers)
-		if fillStruct {
-			value := reflect.New(entityType)
-			id := pointers[0].(uint64)
-			fillFromDBRow(id, engine, pointers, value.Interface().(Entity), true)
-			val = reflect.Append(val, value)
-		} else {
-			fastEntities = append(fastEntities, &fastEntity{data: pointers, engine: engine, schema: schema})
-		}
+		value := reflect.New(entityType)
+		id := pointers[0].(uint64)
+		fillFromDBRow(id, engine, pointers, value.Interface().(Entity), true)
+		val = reflect.Append(val, value)
 		i++
 	}
 	def()
 	totalRows = getTotalRows(engine, withCount, pager, where, schema, i)
 	if len(references) > 0 && i > 0 {
-		if fillStruct {
-			warmUpReferences(engine, true, schema, val, references, true)
-		} else {
-			warmUpReferences(engine, false, schema, fastEntities, references, true)
-		}
+		warmUpReferences(engine, schema, val, references, true)
 	}
-	if fillStruct {
-		valOrigin.Set(val)
-	}
-	return totalRows, fastEntities
+	valOrigin.Set(val)
+	return totalRows
 }
 
-func searchOne(skipFakeDelete bool, fillStruct bool, engine *Engine, where *Where, entity Entity, references []string) (bool, *tableSchema, []interface{}) {
-	return searchRow(skipFakeDelete, fillStruct, engine, where, entity, references)
+func searchOne(skipFakeDelete bool, engine *Engine, where *Where, entity Entity, references []string) (bool, *tableSchema, []interface{}) {
+	return searchRow(skipFakeDelete, engine, where, entity, references)
 }
 
 func searchIDs(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, withCount bool, entityType reflect.Type) (ids []uint64, total int) {

@@ -7,35 +7,21 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCache bool, references ...string) (found bool, fEntity FastEntity, schema *tableSchema) {
-	var orm *ORM
-	if fillStruct {
-		orm = initIfNeeded(engine, entity)
-		schema = orm.tableSchema
-	} else {
-		schema = engine.registry.GetTableSchemaForEntity(entity).(*tableSchema)
-	}
+func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, references ...string) (found bool, schema *tableSchema) {
+	orm := initIfNeeded(engine, entity)
+	schema = orm.tableSchema
 	localCache, hasLocalCache := schema.GetLocalCache(engine)
 	redisCache, hasRedis := schema.GetRedisCache(engine)
 	if !hasLocalCache && engine.dataLoader != nil {
 		e := engine.dataLoader.Load(schema, id)
 		if e == nil {
-			return false, nil, schema
+			return false, schema
 		}
-		if fillStruct {
-			fillFromDBRow(id, engine, e, entity, false)
-		} else {
-			e[0] = id
-			fEntity = &fastEntity{data: e, engine: engine, schema: schema}
-		}
+		fillFromDBRow(id, engine, e, entity, false)
 		if len(references) > 0 {
-			if orm != nil {
-				warmUpReferences(engine, true, schema, orm.elem, references, false)
-			} else {
-				warmUpReferences(engine, false, schema, fEntity, references, false)
-			}
+			warmUpReferences(engine, schema, orm.elem, references, false)
 		}
-		return true, fEntity, schema
+		return true, schema
 	}
 
 	var cacheKey string
@@ -50,23 +36,14 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 			e, has := localCache.Get(cacheKey)
 			if has {
 				if e == "nil" {
-					return false, nil, schema
+					return false, schema
 				}
 				data := e.([]interface{})
-				if fillStruct {
-					fillFromDBRow(id, engine, data, entity, false)
-				} else {
-					data[0] = id
-					fEntity = &fastEntity{data: data, engine: engine, schema: schema}
-				}
+				fillFromDBRow(id, engine, data, entity, false)
 				if len(references) > 0 {
-					if orm != nil {
-						warmUpReferences(engine, true, schema, orm.elem, references, false)
-					} else {
-						warmUpReferences(engine, false, schema, fEntity, references, false)
-					}
+					warmUpReferences(engine, schema, orm.elem, references, false)
 				}
-				return true, fEntity, schema
+				return true, schema
 			}
 		}
 		if hasRedis {
@@ -74,30 +51,21 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 			row, has := redisCache.Get(cacheKey)
 			if has {
 				if row == "nil" {
-					return false, nil, schema
+					return false, schema
 				}
 				decoded := make([]interface{}, len(schema.columnNames))
 				_ = jsoniter.ConfigFastest.Unmarshal([]byte(row), &decoded)
 				convertDataFromJSON(schema.fields, 0, decoded)
-				if fillStruct {
-					fillFromDBRow(id, engine, decoded, entity, false)
-				} else {
-					decoded[0] = id
-					fEntity = &fastEntity{data: decoded, engine: engine, schema: schema}
-				}
+				fillFromDBRow(id, engine, decoded, entity, false)
 				if len(references) > 0 {
-					if orm != nil {
-						warmUpReferences(engine, true, schema, orm.elem, references, false)
-					} else {
-						warmUpReferences(engine, false, schema, fEntity, references, false)
-					}
+					warmUpReferences(engine, schema, orm.elem, references, false)
 				}
-				return true, fEntity, schema
+				return true, schema
 			}
 		}
 	}
 
-	found, _, data := searchRow(false, fillStruct, engine, NewWhere("`ID` = ?", id), entity, nil)
+	found, _, data := searchRow(false, engine, NewWhere("`ID` = ?", id), entity, nil)
 	if !found {
 		if localCache != nil {
 			localCache.Set(cacheKey, "nil")
@@ -105,7 +73,7 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 		if redisCache != nil {
 			redisCache.Set(cacheKey, "nil", 60)
 		}
-		return false, nil, schema
+		return false, schema
 	}
 	if useCache {
 		if localCache != nil {
@@ -116,19 +84,12 @@ func loadByID(engine *Engine, id uint64, entity Entity, fillStruct bool, useCach
 		}
 	}
 
-	if !fillStruct {
-		fEntity = &fastEntity{data: data, engine: engine, schema: schema}
-	}
 	if len(references) > 0 {
-		if orm != nil {
-			warmUpReferences(engine, true, schema, orm.elem, references, false)
-		} else {
-			warmUpReferences(engine, false, schema, fEntity, references, false)
-		}
+		warmUpReferences(engine, schema, orm.elem, references, false)
 	} else {
 		data[0] = id
 	}
-	return true, fEntity, schema
+	return true, schema
 }
 
 func buildRedisValue(data []interface{}) string {
