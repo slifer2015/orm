@@ -139,16 +139,16 @@ func TestLoadById(t *testing.T) {
 }
 
 // BenchmarkLoadByIdLocalCache-12    	  706106	      1510 ns/op	     248 B/op	       5 allocs/op
-func BenchmarkLoadByIdLocalCache(b *testing.B) {
-	benchmarkLoadByIdLocalCache(b, false)
+func BenchmarkLoadByIDdLocalCache(b *testing.B) {
+	benchmarkLoadByIDLocalCache(b, false)
 }
 
 // BenchmarkLoadByIdLocalCacheLazy-12    	 4779974	       252.9 ns/op	       8 B/op	       1 allocs/op
-func BenchmarkLoadByIdLocalCacheLazy(b *testing.B) {
-	benchmarkLoadByIdLocalCache(b, true)
+func BenchmarkLoadByIDLocalCacheLazy(b *testing.B) {
+	benchmarkLoadByIDLocalCache(b, true)
 }
 
-func benchmarkLoadByIdLocalCache(b *testing.B, lazy bool) {
+func benchmarkLoadByIDLocalCache(b *testing.B, lazy bool) {
 	entity := &schemaEntity{}
 	ref := &schemaEntityRef{}
 	registry := &Registry{}

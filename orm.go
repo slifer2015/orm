@@ -20,6 +20,7 @@ type Entity interface {
 	markToDelete()
 	forceMarkToDelete()
 	Loaded() bool
+	IsLazy() bool
 	IsDirty() bool
 	GetDirtyBind() (bind Bind, has bool)
 	SetOnDuplicateKeyUpdate(bind Bind)
@@ -69,7 +70,11 @@ func (orm *ORM) forceMarkToDelete() {
 }
 
 func (orm *ORM) Loaded() bool {
-	return orm.loaded && !orm.lazy
+	return orm.loaded
+}
+
+func (orm *ORM) IsLazy() bool {
+	return orm.lazy
 }
 
 func (orm *ORM) SetOnDuplicateKeyUpdate(bind Bind) {
