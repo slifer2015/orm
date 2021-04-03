@@ -946,7 +946,7 @@ func (r *RedisSearch) Info(indexName string) *RedisSearchIndexInfo {
 
 func getRedisSearchAlters(engine *Engine) (alters []RedisSearchIndexAlter) {
 	alters = make([]RedisSearchIndexAlter, 0)
-	for _, poolName := range engine.GetRegistry().GetRedisPools() {
+	for _, poolName := range engine.GetRegistry().GetRedisPools(false) {
 		r := engine.GetRedis(poolName)
 		info := r.Info("Modules")
 		lines := strings.Split(info, "\r\n")

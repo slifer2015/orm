@@ -12,7 +12,7 @@ type RedisStatistics struct {
 }
 
 func GetRedisStatistics(engine *orm.Engine) []*RedisStatistics {
-	pools := engine.GetRegistry().GetRedisPools()
+	pools := engine.GetRegistry().GetRedisPools(true)
 	results := make([]*RedisStatistics, len(pools))
 	for i, pool := range pools {
 		poolStats := &RedisStatistics{RedisPool: pool, Info: make(map[string]string)}

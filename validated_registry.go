@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 )
 
 type ValidatedRegistry interface {
@@ -15,7 +16,7 @@ type ValidatedRegistry interface {
 	GetEnum(code string) Enum
 	GetEnums() map[string]Enum
 	GetRedisStreams() map[string]map[string][]string
-	GetRedisPools() []string
+	GetRedisPools(groupByAddress bool) []string
 	GetRedisSearchIndices() map[string][]*RedisSearchIndex
 	GetEntities() map[string]reflect.Type
 }
@@ -75,11 +76,15 @@ func (r *validatedRegistry) GetRedisStreams() map[string]map[string][]string {
 	return res
 }
 
-func (r *validatedRegistry) GetRedisPools() []string {
+func (r *validatedRegistry) GetRedisPools(groupByAddress bool) []string {
 	pools := make([]string, 0)
 	groupedByAddress := make(map[string][]string)
 	for code, v := range r.redisServers {
-		groupedByAddress[v.address] = append(groupedByAddress[v.address], code)
+		key := v.address
+		if !groupByAddress {
+			key += strconv.Itoa(v.db)
+		}
+		groupedByAddress[key] = append(groupedByAddress[key], code)
 	}
 	for _, codes := range groupedByAddress {
 		sort.Strings(codes)
