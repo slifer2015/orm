@@ -16,7 +16,7 @@ type ValidatedRegistry interface {
 	GetEnum(code string) Enum
 	GetEnums() map[string]Enum
 	GetRedisStreams() map[string]map[string][]string
-	GetRedisPools(groupByAddress bool) []string
+	GetRedisPools(groupByAddress bool, db ...int) []string
 	GetRedisSearchIndices() map[string][]*RedisSearchIndex
 	GetEntities() map[string]reflect.Type
 }
@@ -76,10 +76,13 @@ func (r *validatedRegistry) GetRedisStreams() map[string]map[string][]string {
 	return res
 }
 
-func (r *validatedRegistry) GetRedisPools(groupByAddress bool) []string {
+func (r *validatedRegistry) GetRedisPools(groupByAddress bool, db ...int) []string {
 	pools := make([]string, 0)
 	groupedByAddress := make(map[string][]string)
 	for code, v := range r.redisServers {
+		if len(db) > 0 && v.db != db[0] {
+			continue
+		}
 		key := v.address
 		if !groupByAddress {
 			key += strconv.Itoa(v.db)
