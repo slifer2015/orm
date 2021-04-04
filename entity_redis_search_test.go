@@ -42,7 +42,6 @@ func TestEntityRedisSearch(t *testing.T) {
 
 	indexer := NewRedisSearchIndexer(engine)
 	indexer.DisableLoop()
-	indexer.Run(context.Background())
 
 	flusher := engine.NewFlusher()
 	now := time.Now()

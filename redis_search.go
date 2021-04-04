@@ -1102,7 +1102,7 @@ func getRedisSearchAlters(engine *Engine) (alters []RedisSearchIndexAlter) {
 			if has {
 				continue
 			}
-			alters = append(alters, search.addAlter(index, name, 0, []string{"new document"}))
+			alters = append(alters, search.addAlter(index, name, 0, []string{"new index"}))
 		}
 	}
 	return alters
@@ -1112,8 +1112,8 @@ func (r *RedisSearch) addAlter(index *RedisSearchIndex, name string, documents u
 	query := fmt.Sprintf("%v", r.createIndexArgs(index, index.Name))[1:]
 	query = query[0 : len(query)-1]
 	alter := RedisSearchIndexAlter{Pool: r.code, Query: query, Changes: changes, search: r}
-	_, indexing := r.redis.HGet(redisSearchForceIndexKey, name)
-	if !indexing {
+	stamp, indexing := r.redis.HGet(redisSearchForceIndexKey, name)
+	if !indexing || stamp[0:3] == "ok:" {
 		indexToAdd := index
 		alter.Execute = func() {
 			alter.search.ForceReindex(indexToAdd.Name)
