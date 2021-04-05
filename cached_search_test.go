@@ -218,6 +218,13 @@ func testCachedSearch(t *testing.T, localCache bool, redisCache bool) {
 	assert.Equal(t, "Name 4", rows[1].ReferenceOne.Name)
 	assert.Equal(t, "Name 5", rows[2].ReferenceOne.Name)
 
+	assert.PanicsWithError(t, "reference WrongReference in cachedSearchEntity is not valid", func() {
+		engine.CachedSearchWithReferences(&rows, "IndexAge", nil, []interface{}{10}, []string{"WrongReference"})
+	})
+	assert.PanicsWithError(t, "interface *orm.cachedSearchEntity is no slice of orm.Entity", func() {
+		engine.CachedSearchWithReferences(entity, "IndexAge", nil, []interface{}{10}, []string{"WrongReference"})
+	})
+
 	flusher.Flush()
 	for i := 1; i <= 200; i++ {
 		e := &cachedSearchEntity{Name: "NameNew " + strconv.Itoa(i), Age: uint16(77)}

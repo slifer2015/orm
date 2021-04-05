@@ -18,7 +18,7 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 	if lenIDs == 0 {
 		return
 	}
-	t, has, name := getEntityTypeForSlice(engine.registry, entities.Type())
+	t, has, name := getEntityTypeForSlice(engine.registry, entities.Type(), true)
 	if !has {
 		panic(fmt.Errorf("entity '%s' is not registered", name))
 	}
@@ -84,7 +84,7 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 	}
 	l := len(ids)
 	if l > 0 {
-		search(false, engine, NewWhere("`ID` IN ?", ids), NewPager(1, l), false, lazy, entities)
+		search(false, engine, NewWhere("`ID` IN ?", ids), NewPager(1, l), false, lazy, true, entities)
 		for i := 0; i < entities.Len(); i++ {
 			e := entities.Index(i).Interface().(Entity)
 			results[schema.getCacheKey(e.GetID())] = e

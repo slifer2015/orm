@@ -13,9 +13,9 @@ import (
 const idsOnCachePage = 100
 
 func cachedSearch(engine *Engine, entities interface{}, indexName string, pager *Pager,
-	arguments []interface{}, lazy bool, references []string) (totalRows int, ids []uint64) {
+	arguments []interface{}, lazy, checkIsSlice bool, references []string) (totalRows int, ids []uint64) {
 	value := reflect.ValueOf(entities)
-	entityType, has, name := getEntityTypeForSlice(engine.registry, value.Type())
+	entityType, has, name := getEntityTypeForSlice(engine.registry, value.Type(), checkIsSlice)
 	if !has {
 		panic(fmt.Errorf("entity '%s' is not registered", name))
 	}

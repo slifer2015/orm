@@ -15,7 +15,7 @@ func (e *Engine) RedisSearchIds(entity Entity, query *RedisSearchQuery, pager *P
 
 func (e *Engine) RedisSearch(entities interface{}, query *RedisSearchQuery, pager *Pager, references ...string) (totalRows uint64) {
 	elem := reflect.ValueOf(entities).Elem()
-	_, has, name := getEntityTypeForSlice(e.registry, elem.Type())
+	_, has, name := getEntityTypeForSlice(e.registry, elem.Type(), true)
 	if !has {
 		panic(fmt.Errorf("entity '%s' is not registered", name))
 	}

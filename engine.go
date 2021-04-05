@@ -396,11 +396,11 @@ func (e *Engine) GetRegistry() ValidatedRegistry {
 }
 
 func (e *Engine) SearchWithCount(where *Where, pager *Pager, entities interface{}, references ...string) (totalRows int) {
-	return search(true, e, where, pager, true, false, reflect.ValueOf(entities).Elem(), references...)
+	return search(true, e, where, pager, true, false, true, reflect.ValueOf(entities).Elem(), references...)
 }
 
 func (e *Engine) Search(where *Where, pager *Pager, entities interface{}, references ...string) {
-	search(true, e, where, pager, false, false, reflect.ValueOf(entities).Elem(), references...)
+	search(true, e, where, pager, false, false, true, reflect.ValueOf(entities).Elem(), references...)
 }
 
 func (e *Engine) SearchIDsWithCount(where *Where, pager *Pager, entity Entity) (results []uint64, totalRows int) {
@@ -428,22 +428,22 @@ func (e *Engine) CachedSearchOneWithReferences(entity Entity, indexName string, 
 }
 
 func (e *Engine) CachedSearch(entities interface{}, indexName string, pager *Pager, arguments ...interface{}) (totalRows int) {
-	total, _ := cachedSearch(e, entities, indexName, pager, arguments, false, nil)
+	total, _ := cachedSearch(e, entities, indexName, pager, arguments, false, true, nil)
 	return total
 }
 
 func (e *Engine) CachedSearchIDs(entity Entity, indexName string, pager *Pager, arguments ...interface{}) (totalRows int, ids []uint64) {
-	return cachedSearch(e, entity, indexName, pager, arguments, false, nil)
+	return cachedSearch(e, entity, indexName, pager, arguments, false, false, nil)
 }
 
 func (e *Engine) CachedSearchCount(entity Entity, indexName string, arguments ...interface{}) int {
-	total, _ := cachedSearch(e, entity, indexName, NewPager(1, 1), arguments, false, nil)
+	total, _ := cachedSearch(e, entity, indexName, NewPager(1, 1), arguments, false, false, nil)
 	return total
 }
 
 func (e *Engine) CachedSearchWithReferences(entities interface{}, indexName string, pager *Pager,
 	arguments []interface{}, references []string) (totalRows int) {
-	total, _ := cachedSearch(e, entities, indexName, pager, arguments, false, references)
+	total, _ := cachedSearch(e, entities, indexName, pager, arguments, false, true, references)
 	return total
 }
 

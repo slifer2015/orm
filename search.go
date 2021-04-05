@@ -272,12 +272,12 @@ func searchRow(skipFakeDelete bool, engine *Engine, where *Where, entity Entity,
 	return true, schema, pointers
 }
 
-func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, withCount, lazy bool, entities reflect.Value, references ...string) (totalRows int) {
+func search(skipFakeDelete bool, engine *Engine, where *Where, pager *Pager, withCount, lazy, checkIsSlice bool, entities reflect.Value, references ...string) (totalRows int) {
 	if pager == nil {
 		pager = NewPager(1, 50000)
 	}
 	entities.SetLen(0)
-	entityType, has, name := getEntityTypeForSlice(engine.registry, entities.Type())
+	entityType, has, name := getEntityTypeForSlice(engine.registry, entities.Type(), checkIsSlice)
 	if !has {
 		panic(fmt.Errorf("entity '%s' is not registered", name))
 	}
@@ -625,13 +625,15 @@ func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, f
 	return index
 }
 
-func getEntityTypeForSlice(registry *validatedRegistry, sliceType reflect.Type) (reflect.Type, bool, string) {
+func getEntityTypeForSlice(registry *validatedRegistry, sliceType reflect.Type, checkIsSlice bool) (reflect.Type, bool, string) {
 	name := sliceType.String()
 	if name[0] == 42 {
 		name = name[1:]
 	}
 	if name[0] == 91 {
 		name = name[3:]
+	} else if checkIsSlice {
+		panic(fmt.Errorf("interface %s is no slice of orm.Entity", sliceType.String()))
 	}
 	e, has := registry.entities[name]
 	return e, has, name
