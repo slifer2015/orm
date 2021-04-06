@@ -223,6 +223,11 @@ func (r *RedisSearchResult) Value(field string) interface{} {
 }
 
 func (q *RedisSearchQuery) Query(query string) *RedisSearchQuery {
+	q.query = EscapeRedisSearchString(query)
+	return q
+}
+
+func (q *RedisSearchQuery) QueryRaw(query string) *RedisSearchQuery {
 	q.query = query
 	return q
 }
