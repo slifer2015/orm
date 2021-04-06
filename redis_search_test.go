@@ -317,7 +317,7 @@ func TestRedisSearch(t *testing.T) {
 	assert.Equal(t, "hello 33 friend tom...", rows[0].Value("title2"))
 
 	query = &RedisSearchQuery{}
-	query.Query("@status: {temporary}").Sort("id", false)
+	query.QueryRaw("@status: {temporary}").Sort("id", false)
 	total, rows = search.Search("test2", query, NewPager(1, 10))
 	assert.Equal(t, uint64(2), total)
 	assert.Equal(t, "33", rows[0].Value("id"))
@@ -471,6 +471,12 @@ func TestRedisSearch(t *testing.T) {
 	pusher.Flush()
 	query = &RedisSearchQuery{}
 	query.FilterString("title", "adam@gmail.com")
+	total, rows = search.Search("test2", query, NewPager(1, 10))
+	assert.Equal(t, uint64(1), total)
+	assert.Equal(t, "adam@gmail.com", rows[0].Value("title"))
+
+	query = &RedisSearchQuery{}
+	query.QueryRaw("@title: " + EscapeRedisSearchString("adam@gmail.com"))
 	total, rows = search.Search("test2", query, NewPager(1, 10))
 	assert.Equal(t, uint64(1), total)
 	assert.Equal(t, "adam@gmail.com", rows[0].Value("title"))
