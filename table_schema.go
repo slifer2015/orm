@@ -520,7 +520,7 @@ func initTableSchema(registry *Registry, entityType reflect.Type) (*tableSchema,
 				pusher.NewDocument(redisSearchIndex.Prefixes[0] + strconv.FormatUint(lastID, 10))
 				for i, column := range indexColumns {
 					val := mapPointerToValue[column](pointers[i+1])
-					pusher.SetField(column, mapBindToRedisSearch[column](val))
+					pusher.setField(column, mapBindToRedisSearch[column](val))
 				}
 				pusher.PushDocument()
 				total++
@@ -746,7 +746,9 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 				} else {
 					stem, hasStem := tags["stem"]
 					index.AddTextField(prefix+f.Name, 1.0, hasSortable, !hasSearchable, !hasStem || stem != "true")
-					mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapper
+					mapBindToRedisSearch[prefix+f.Name] = func(val interface{}) interface{} {
+						return EscapeRedisSearchString(val.(string))
+					}
 				}
 			}
 			mapBindToScanPointer[prefix+f.Name] = func() interface{} {
@@ -983,7 +985,7 @@ var defaultRedisSearchMapperNullableString = func(val interface{}) interface{} {
 	if val == nil {
 		return "NULL"
 	}
-	return val
+	return EscapeRedisSearchString(val.(string))
 }
 
 var defaultRedisSearchMapperNullableNumeric = func(val interface{}) interface{} {

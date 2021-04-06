@@ -29,6 +29,16 @@ type RedisSearch struct {
 	redis  *RedisCache
 }
 
+var redisSearchStringReplacer = strings.NewReplacer(",", "\\,", ".", "\\.", "<", "\\<", ">", "\\>", "{", "\\{",
+	"}", "\\}", "[", "\\[", "]", "\\]", "\"", "\\\"", "'", "\\'", ":", "\\:", ";", "\\;", "!", "\\!", "@", "\\@",
+	"#", "\\#", "$", "\\$", "%", "\\%", "^", "\\^", "&", "\\&", "*", "\\*", "(", "\\(", ")", "\\)", "-", "\\-",
+	"+", "\\+", "=", "\\=", "~", "\\~")
+
+var redisSearchStringReplacerBack = strings.NewReplacer("\\,", ",", "\\.", ".", "<", "<", "\\>", ">", "\\{", "{",
+	"\\}", "}", "\\[", "[", "\\]", "]", "\\\"", "\"", "\\'", "'", "\\:", ":", "\\;", ";", "\\!", "!", "\\@", "@",
+	"\\#", "#", "\\$", "$", "\\%", "%", "\\^", "^", "\\&", "&", "\\*", "*", "\\(", "(", "\\)", ")", "\\-", "-",
+	"\\+", "+", "\\=", "=", "\\~", "~")
+
 type RedisSearchIndex struct {
 	Name            string
 	RedisPool       string
@@ -167,6 +177,7 @@ type RedisSearchQuery struct {
 	filtersNumeric     map[string][][]string
 	filtersGeo         map[string][]interface{}
 	filtersTags        map[string][][]string
+	filtersString      map[string][][]string
 	inKeys             []interface{}
 	inFields           []interface{}
 	toReturn           []interface{}
@@ -200,6 +211,11 @@ type RedisSearchResult struct {
 func (r *RedisSearchResult) Value(field string) interface{} {
 	for i := 0; i < len(r.Fields); i += 2 {
 		if r.Fields[i] == field {
+			val := r.Fields[i+1]
+			asString, is := val.(string)
+			if is {
+				return redisSearchStringReplacerBack.Replace(asString)
+			}
 			return r.Fields[i+1]
 		}
 	}
@@ -245,6 +261,18 @@ func (q *RedisSearchQuery) FilterIntLessEqual(field string, value int64) *RedisS
 
 func (q *RedisSearchQuery) FilterIntLess(field string, value int64) *RedisSearchQuery {
 	return q.filterNumericMinMax(field, "-inf", "("+strconv.FormatInt(value, 10))
+}
+
+func (q *RedisSearchQuery) FilterString(field string, value ...string) *RedisSearchQuery {
+	if q.filtersString == nil {
+		q.filtersString = make(map[string][][]string)
+	}
+	valueEscaped := make([]string, len(value))
+	for i, v := range value {
+		valueEscaped[i] = "\"" + EscapeRedisSearchString(v) + "\""
+	}
+	q.filtersString[field] = append(q.filtersString[field], valueEscaped)
+	return q
 }
 
 func (q *RedisSearchQuery) FilterFloatMinMax(field string, min, max float64) *RedisSearchQuery {
@@ -342,6 +370,8 @@ func (q *RedisSearchQuery) FilterTag(field string, tag ...string) *RedisSearchQu
 	for i, v := range tag {
 		if v == "" {
 			v = "NULL"
+		} else {
+			v = EscapeRedisSearchString(v)
 		}
 		tagEscaped[i] = v
 	}
@@ -546,6 +576,14 @@ func (r *RedisSearch) search(index string, query *RedisSearchQuery, pager *Pager
 				q += " "
 			}
 			q += "@" + field + ":{ " + strings.Join(v, " | ") + " }"
+		}
+	}
+	for field, in := range query.filtersString {
+		for _, v := range in {
+			if q != "" {
+				q += " "
+			}
+			q += "@" + field + ":( " + strings.Join(v, " | ") + " )"
 		}
 	}
 	if q == "" {
@@ -942,6 +980,10 @@ func (r *RedisSearch) Info(indexName string) *RedisSearchIndexInfo {
 		}
 	}
 	return info
+}
+
+func EscapeRedisSearchString(val string) string {
+	return redisSearchStringReplacer.Replace(val)
 }
 
 func getRedisSearchAlters(engine *Engine) (alters []RedisSearchIndexAlter) {
