@@ -16,6 +16,8 @@ import (
 	"github.com/apex/log/handlers/text"
 )
 
+var defaultQueryDebug = text.New(os.Stdout)
+
 type Engine struct {
 	mutex                     sync.Mutex
 	registry                  *validatedRegistry
@@ -104,9 +106,16 @@ func (e *Engine) AddQueryLogger(handler logApex.Handler, level logApex.Level, so
 		e.queryLoggers = make(map[QueryLoggerSource]*logger)
 	}
 	newHandler := levelHandler.New(handler, level)
+MAIN:
 	for _, source := range source {
 		l, has := e.queryLoggers[source]
 		if has {
+			for _, v := range l.handler.Handlers {
+				asLevel, is := v.(*levelHandler.Handler)
+				if is && asLevel.Handler == handler {
+					continue MAIN
+				}
+			}
 			l.handler.Handlers = append(l.handler.Handlers, newHandler)
 		} else {
 			e.queryLoggers[source] = e.newLogger(newHandler, level)
@@ -129,7 +138,7 @@ func (e *Engine) AddQueryLogger(handler logApex.Handler, level logApex.Level, so
 }
 
 func (e *Engine) EnableQueryDebug(source ...QueryLoggerSource) {
-	e.AddQueryLogger(text.New(os.Stdout), logApex.DebugLevel, source...)
+	e.AddQueryLogger(defaultQueryDebug, logApex.DebugLevel, source...)
 }
 
 func (e *Engine) SetLogMetaData(key string, value interface{}) {
