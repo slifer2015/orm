@@ -233,8 +233,8 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 			var ref reflect.Value
 			var refEntity reflect.Value
 			if many {
-				refEntity = rows.Index(i).Elem()
-				ref = reflect.Indirect(refEntity).FieldByName(refName)
+				refEntity = rows.Index(i)
+				ref = reflect.Indirect(refEntity.Elem()).FieldByName(refName)
 			} else {
 				refEntity = rows
 				ref = reflect.Indirect(refEntity).FieldByName(refName)
