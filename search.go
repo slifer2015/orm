@@ -372,7 +372,7 @@ func fillFromDBRow(id uint64, engine *Engine, data []interface{}, entity Entity,
 	orm.idElem.SetUint(id)
 	data[0] = id
 	if !lazy {
-		_ = fillStruct(engine.registry, 0, data, orm.tableSchema.fields, elem)
+		_ = fillStruct(engine.registry, 0, data, orm.tableSchema.fields, orm, elem)
 	}
 	orm.inDB = true
 	orm.loaded = true
@@ -387,7 +387,7 @@ func fillFromDBRow(id uint64, engine *Engine, data []interface{}, entity Entity,
 	}
 }
 
-func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, fields *tableFields, value reflect.Value) uint16 {
+func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, fields *tableFields, orm *ORM, value reflect.Value) uint16 {
 	for _, i := range fields.uintegers {
 		value.Field(i).SetUint(data[index].(uint64))
 		index++
@@ -579,7 +579,7 @@ func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, f
 		}
 		refType := fields.refsTypes[k]
 		if integer > 0 {
-			if !field.IsZero() {
+			if orm.lazy && !field.IsZero() {
 				index++
 				continue
 			}
@@ -605,7 +605,7 @@ func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, f
 		refType := fields.refsManyTypes[k]
 		slice := reflect.MakeSlice(reflect.SliceOf(refType), length, length)
 		if f != nil {
-			if !field.IsZero() {
+			if orm.lazy && !field.IsZero() {
 				index++
 				continue
 			}
@@ -626,7 +626,7 @@ func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, f
 		field := value.Field(i)
 		newVal := reflect.New(field.Type())
 		value := newVal.Elem()
-		newIndex := fillStruct(registry, index, data, subFields, value)
+		newIndex := fillStruct(registry, index, data, subFields, orm, value)
 		field.Set(value)
 		index = newIndex
 	}

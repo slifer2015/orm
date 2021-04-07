@@ -248,15 +248,30 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 				if idVal == nil {
 					continue
 				}
-				id := idVal.(uint64)
-				if id == 0 {
-					continue
+				if manyRef {
+					ids := make([]uint64, 0)
+					_ = jsoniter.ConfigFastest.Unmarshal([]byte(idVal.(string)), &ids)
+					length := len(ids)
+					slice := reflect.MakeSlice(reflect.SliceOf(ref.Type().Elem()), length, length)
+					for k, id := range ids {
+						n := reflect.New(ref.Type().Elem().Elem())
+						orm := initIfNeeded(engine.registry, n.Interface().(Entity))
+						orm.idElem.SetUint(id)
+						orm.inDB = true
+						slice.Index(k).Set(n)
+					}
+					ref.Set(slice)
+				} else {
+					id := idVal.(uint64)
+					if id == 0 {
+						continue
+					}
+					n := reflect.New(ref.Type().Elem())
+					orm := initIfNeeded(engine.registry, n.Interface().(Entity))
+					orm.idElem.SetUint(id)
+					orm.inDB = true
+					ref.Set(n)
 				}
-				n := reflect.New(ref.Type().Elem())
-				orm := initIfNeeded(engine.registry, n.Interface().(Entity))
-				orm.idElem.SetUint(id)
-				orm.inDB = true
-				ref.Set(n)
 			}
 			if manyRef {
 				length := ref.Len()

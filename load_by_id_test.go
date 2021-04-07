@@ -167,6 +167,30 @@ func TestLoadById(t *testing.T) {
 	assert.True(t, entity.ReferenceMany[1].IsLoaded())
 	assert.True(t, entity.ReferenceMany[2].IsLoaded())
 
+	entity = &loadByIDEntity{}
+	found = engine.LoadByIDLazy(200, entity, "ReferenceMany")
+	assert.True(t, found)
+	assert.Len(t, entity.ReferenceMany, 3)
+	assert.Equal(t, uint(100), entity.ReferenceMany[0].ID)
+	assert.Equal(t, uint(101), entity.ReferenceMany[1].ID)
+	assert.Equal(t, uint(102), entity.ReferenceMany[2].ID)
+	assert.Equal(t, "", entity.ReferenceMany[0].Name)
+	assert.Equal(t, "", entity.ReferenceMany[1].Name)
+	assert.Equal(t, "", entity.ReferenceMany[2].Name)
+	assert.False(t, entity.ReferenceMany[0].IsInitialised())
+	assert.False(t, entity.ReferenceMany[1].IsInitialised())
+	assert.False(t, entity.ReferenceMany[2].IsInitialised())
+	assert.True(t, entity.ReferenceMany[0].IsLoaded())
+	assert.True(t, entity.ReferenceMany[1].IsLoaded())
+	assert.True(t, entity.ReferenceMany[2].IsLoaded())
+	assert.Equal(t, "rm1", entity.ReferenceMany[0].GetFieldLazy("Name"))
+	assert.Equal(t, "rm2", entity.ReferenceMany[1].GetFieldLazy("Name"))
+	assert.Equal(t, "rm3", entity.ReferenceMany[2].GetFieldLazy("Name"))
+	entity.ReferenceMany[0].Init(engine)
+	assert.Equal(t, "rm1", entity.ReferenceMany[0].Name)
+	entity.ReferenceMany[0].Init(engine)
+	assert.True(t, entity.ReferenceMany[0].IsInitialised())
+
 	engine = PrepareTables(t, &Registry{}, 5)
 	entity = &loadByIDEntity{}
 	assert.PanicsWithError(t, "entity 'orm.loadByIDEntity' is not registered", func() {

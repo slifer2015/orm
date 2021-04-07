@@ -92,7 +92,7 @@ func (orm *ORM) IsInitialised() bool {
 
 func (orm *ORM) Init(engine *Engine) {
 	if orm.lazy && orm.loaded {
-		fillStruct(engine.registry, 0, orm.dBData, orm.tableSchema.fields, orm.elem)
+		fillStruct(engine.registry, 0, orm.dBData, orm.tableSchema.fields, orm, orm.elem)
 		orm.lazy = false
 	}
 }
