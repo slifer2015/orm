@@ -408,8 +408,16 @@ func (e *Engine) SearchWithCount(where *Where, pager *Pager, entities interface{
 	return search(true, e, where, pager, true, false, true, reflect.ValueOf(entities).Elem(), references...)
 }
 
+func (e *Engine) SearchWithCountLAzy(where *Where, pager *Pager, entities interface{}, references ...string) (totalRows int) {
+	return search(true, e, where, pager, true, true, true, reflect.ValueOf(entities).Elem(), references...)
+}
+
 func (e *Engine) Search(where *Where, pager *Pager, entities interface{}, references ...string) {
 	search(true, e, where, pager, false, false, true, reflect.ValueOf(entities).Elem(), references...)
+}
+
+func (e *Engine) SearchLazy(where *Where, pager *Pager, entities interface{}, references ...string) {
+	search(true, e, where, pager, false, true, true, reflect.ValueOf(entities).Elem(), references...)
 }
 
 func (e *Engine) SearchIDsWithCount(where *Where, pager *Pager, entity Entity) (results []uint64, totalRows int) {
@@ -423,6 +431,11 @@ func (e *Engine) SearchIDs(where *Where, pager *Pager, entity Entity) []uint64 {
 
 func (e *Engine) SearchOne(where *Where, entity Entity, references ...string) (found bool) {
 	found, _, _ = searchOne(true, e, where, entity, false, references)
+	return found
+}
+
+func (e *Engine) SearchOneLazy(where *Where, entity Entity, references ...string) (found bool) {
+	found, _, _ = searchOne(true, e, where, entity, true, references)
 	return found
 }
 

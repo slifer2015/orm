@@ -267,7 +267,7 @@ func searchRow(skipFakeDelete bool, engine *Engine, where *Where, entity Entity,
 	id := pointers[0].(uint64)
 	fillFromDBRow(id, engine, pointers, entity, true, lazy)
 	if len(references) > 0 {
-		warmUpReferences(engine, schema, entity.getORM().elem, references, false, lazy)
+		warmUpReferences(engine, schema, entity.getORM().value, references, false, lazy)
 	}
 	return true, schema, pointers
 }
