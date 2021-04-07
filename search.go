@@ -579,6 +579,10 @@ func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, f
 		}
 		refType := fields.refsTypes[k]
 		if integer > 0 {
+			if !field.IsZero() {
+				index++
+				continue
+			}
 			n := reflect.New(refType.Elem())
 			orm := initIfNeeded(registry, n.Interface().(Entity))
 			orm.idElem.SetUint(integer)
@@ -601,6 +605,10 @@ func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, f
 		refType := fields.refsManyTypes[k]
 		slice := reflect.MakeSlice(reflect.SliceOf(refType), length, length)
 		if f != nil {
+			if !field.IsZero() {
+				index++
+				continue
+			}
 			for i, id := range f {
 				n := reflect.New(refType.Elem())
 				orm := initIfNeeded(registry, n.Interface().(Entity))
