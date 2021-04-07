@@ -440,17 +440,32 @@ func (e *Engine) SearchOneLazy(where *Where, entity Entity, references ...string
 }
 
 func (e *Engine) CachedSearchOne(entity Entity, indexName string, arguments ...interface{}) (found bool) {
-	found, _ = cachedSearchOne(e, entity, indexName, true, arguments, nil)
+	found, _ = cachedSearchOne(e, entity, indexName, true, false, arguments, nil)
+	return found
+}
+
+func (e *Engine) CachedSearchOneLazy(entity Entity, indexName string, arguments ...interface{}) (found bool) {
+	found, _ = cachedSearchOne(e, entity, indexName, true, true, arguments, nil)
 	return found
 }
 
 func (e *Engine) CachedSearchOneWithReferences(entity Entity, indexName string, arguments []interface{}, references []string) (found bool) {
-	found, _ = cachedSearchOne(e, entity, indexName, true, arguments, references)
+	found, _ = cachedSearchOne(e, entity, indexName, true, false, arguments, references)
+	return found
+}
+
+func (e *Engine) CachedSearchOneWithReferencesLazy(entity Entity, indexName string, arguments []interface{}, references []string) (found bool) {
+	found, _ = cachedSearchOne(e, entity, indexName, true, true, arguments, references)
 	return found
 }
 
 func (e *Engine) CachedSearch(entities interface{}, indexName string, pager *Pager, arguments ...interface{}) (totalRows int) {
 	total, _ := cachedSearch(e, entities, indexName, pager, arguments, false, true, nil)
+	return total
+}
+
+func (e *Engine) CachedSearchLazy(entities interface{}, indexName string, pager *Pager, arguments ...interface{}) (totalRows int) {
+	total, _ := cachedSearch(e, entities, indexName, pager, arguments, true, true, nil)
 	return total
 }
 
@@ -466,6 +481,12 @@ func (e *Engine) CachedSearchCount(entity Entity, indexName string, arguments ..
 func (e *Engine) CachedSearchWithReferences(entities interface{}, indexName string, pager *Pager,
 	arguments []interface{}, references []string) (totalRows int) {
 	total, _ := cachedSearch(e, entities, indexName, pager, arguments, false, true, references)
+	return total
+}
+
+func (e *Engine) CachedSearchWithReferencesLazy(entities interface{}, indexName string, pager *Pager,
+	arguments []interface{}, references []string) (totalRows int) {
+	total, _ := cachedSearch(e, entities, indexName, pager, arguments, true, true, references)
 	return total
 }
 

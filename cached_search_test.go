@@ -94,6 +94,12 @@ func testCachedSearch(t *testing.T, localCache bool, redisCache bool) {
 	assert.Equal(t, uint(3), rows[2].ReferenceOne.ID)
 	assert.Equal(t, uint(4), rows[3].ReferenceOne.ID)
 	assert.Equal(t, uint(5), rows[4].ReferenceOne.ID)
+	assert.True(t, rows[0].IsInitialised())
+
+	totalRows = engine.CachedSearchLazy(&rows, "IndexAge", nil, 10)
+	assert.EqualValues(t, 5, totalRows)
+	assert.Len(t, rows, 5)
+	assert.False(t, rows[0].IsInitialised())
 
 	totalRows = engine.CachedSearchCount(entity, "IndexAge", 10)
 	assert.EqualValues(t, 5, totalRows)
@@ -185,6 +191,12 @@ func testCachedSearch(t *testing.T, localCache bool, redisCache bool) {
 	has := engine.CachedSearchOne(&row, "IndexName", "Name 6")
 	assert.True(t, has)
 	assert.Equal(t, uint(6), row.ID)
+	assert.True(t, row.IsInitialised())
+
+	has = engine.CachedSearchOneLazy(&row, "IndexName", "Name 6")
+	assert.True(t, has)
+	assert.Equal(t, uint(6), row.ID)
+	assert.False(t, row.IsInitialised())
 
 	DBLogger.Entries = make([]*apexLog.Entry, 0)
 	has = engine.CachedSearchOne(&row, "IndexName", "Name 6")
@@ -197,6 +209,15 @@ func testCachedSearch(t *testing.T, localCache bool, redisCache bool) {
 	assert.Equal(t, uint(4), row.ID)
 	assert.NotNil(t, row.ReferenceOne)
 	assert.Equal(t, "Name 4", row.ReferenceOne.Name)
+	assert.True(t, row.IsInitialised())
+
+	row = cachedSearchEntity{}
+	has = engine.CachedSearchOneWithReferencesLazy(&row, "IndexName", []interface{}{"Name 4"}, []string{"ReferenceOne"})
+	assert.True(t, has)
+	assert.Equal(t, uint(4), row.ID)
+	assert.NotNil(t, row.ReferenceOne)
+	assert.Equal(t, "Name 4", row.ReferenceOne.GetFieldLazy("Name"))
+	assert.False(t, row.IsInitialised())
 
 	has = engine.CachedSearchOne(&row, "IndexName", "Name 99")
 	assert.False(t, has)
@@ -217,6 +238,14 @@ func testCachedSearch(t *testing.T, localCache bool, redisCache bool) {
 	assert.Equal(t, "Name 3", rows[0].ReferenceOne.Name)
 	assert.Equal(t, "Name 4", rows[1].ReferenceOne.Name)
 	assert.Equal(t, "Name 5", rows[2].ReferenceOne.Name)
+	assert.True(t, rows[0].IsInitialised())
+
+	totalRows = engine.CachedSearchWithReferencesLazy(&rows, "IndexAge", nil, []interface{}{10}, []string{"ReferenceOne"})
+	assert.Equal(t, 3, totalRows)
+	assert.Equal(t, "Name 3", rows[0].ReferenceOne.GetFieldLazy("Name"))
+	assert.Equal(t, "Name 4", rows[1].ReferenceOne.GetFieldLazy("Name"))
+	assert.Equal(t, "Name 5", rows[2].ReferenceOne.GetFieldLazy("Name"))
+	assert.False(t, rows[0].IsInitialised())
 
 	assert.PanicsWithError(t, "reference WrongReference in cachedSearchEntity is not valid", func() {
 		engine.CachedSearchWithReferences(&rows, "IndexAge", nil, []interface{}{10}, []string{"WrongReference"})
