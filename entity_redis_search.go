@@ -14,6 +14,14 @@ func (e *Engine) RedisSearchIds(entity Entity, query *RedisSearchQuery, pager *P
 }
 
 func (e *Engine) RedisSearch(entities interface{}, query *RedisSearchQuery, pager *Pager, references ...string) (totalRows uint64) {
+	return e.redisSearchBase(entities, query, pager, false, references...)
+}
+
+func (e *Engine) RedisSearchLazy(entities interface{}, query *RedisSearchQuery, pager *Pager, references ...string) (totalRows uint64) {
+	return e.redisSearchBase(entities, query, pager, true, references...)
+}
+
+func (e *Engine) redisSearchBase(entities interface{}, query *RedisSearchQuery, pager *Pager, lazy bool, references ...string) (totalRows uint64) {
 	elem := reflect.ValueOf(entities).Elem()
 	_, has, name := getEntityTypeForSlice(e.registry, elem.Type(), true)
 	if !has {
@@ -22,19 +30,27 @@ func (e *Engine) RedisSearch(entities interface{}, query *RedisSearchQuery, page
 	schema := e.GetRegistry().GetTableSchema(name).(*tableSchema)
 	ids, total := redisSearch(e, schema, query, pager, references)
 	if total > 0 {
-		e.LoadByIDs(ids, entities, references...)
+		tryByIDs(e, ids, reflect.ValueOf(entities).Elem(), references, lazy)
 	}
 	return total
 }
 
 func (e *Engine) RedisSearchOne(entity Entity, query *RedisSearchQuery, references ...string) (found bool) {
+	return e.redisSearchOne(entity, query, false, references...)
+}
+
+func (e *Engine) RedisSearchOneLazy(entity Entity, query *RedisSearchQuery, references ...string) (found bool) {
+	return e.redisSearchOne(entity, query, true, references...)
+}
+
+func (e *Engine) redisSearchOne(entity Entity, query *RedisSearchQuery, lazy bool, references ...string) (found bool) {
 	schema := e.GetRegistry().GetTableSchemaForEntity(entity).(*tableSchema)
 	ids, total := redisSearch(e, schema, query, NewPager(1, 1), nil)
 	if total == 0 {
 		return false
 	}
-	e.LoadByID(ids[0], entity, references...)
-	return true
+	found, _ = loadByID(e, ids[0], entity, true, lazy, references...)
+	return found
 }
 
 func redisSearch(e *Engine, schema *tableSchema, query *RedisSearchQuery, pager *Pager, references []string) ([]uint64, uint64) {
