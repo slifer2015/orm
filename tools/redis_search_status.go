@@ -25,9 +25,9 @@ func GetRedisSearchStatistics(engine *orm.Engine) []*RedisSearchStatistics {
 	indices := engine.GetRegistry().GetRedisSearchIndices()
 	for pool, list := range indices {
 		search := engine.GetRedisSearch(pool)
-		stamps := engine.GetRedis(pool).HGetAll("_orm_force_index")
 		indicesInRedis := search.ListIndices()
 		for _, index := range list {
+			stamps := engine.GetRedis(pool).HGetAll("_orm_force_index" + index.Name)
 			stat := &RedisSearchStatistics{Index: index, Versions: make([]*RedisSearchStatisticsIndexVersion, 0)}
 			current := ""
 			info := search.Info(index.Name)
@@ -41,16 +41,11 @@ func GetRedisSearchStatistics(engine *orm.Engine) []*RedisSearchStatistics {
 					stat.Versions = append(stat.Versions, indexStats)
 				}
 			}
-			stamp, has := stamps[index.Name]
-			if has {
-				parts := strings.Split(stamp, ":")
-				if parts[0] != "ok" {
-					stat.ForceReindex = true
-					stat.ForceReindexVersion, _ = strconv.ParseUint(parts[1], 10, 64)
-					stat.ForceReindexLastID, _ = strconv.ParseUint(parts[0], 10, 64)
-				}
-			} else {
+			for k, v := range stamps {
 				stat.ForceReindex = true
+				stat.ForceReindexVersion, _ = strconv.ParseUint(k, 10, 64)
+				stat.ForceReindexLastID, _ = strconv.ParseUint(v, 10, 64)
+				break
 			}
 			result = append(result, stat)
 		}
