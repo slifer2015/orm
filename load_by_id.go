@@ -58,7 +58,7 @@ func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, lazy bool
 				convertDataFromJSON(schema.fields, 0, decoded)
 				fillFromDBRow(id, engine, decoded, entity, false, lazy)
 				if len(references) > 0 {
-					warmUpReferences(engine, schema, orm.elem, references, false, lazy)
+					warmUpReferences(engine, schema, orm.value, references, false, lazy)
 				}
 				return true, schema
 			}

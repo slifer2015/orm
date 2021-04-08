@@ -193,17 +193,20 @@ func testCachedSearch(t *testing.T, localCache bool, redisCache bool) {
 	assert.Equal(t, uint(6), row.ID)
 	assert.True(t, row.IsInitialised())
 
+	row = cachedSearchEntity{}
 	has = engine.CachedSearchOneLazy(&row, "IndexName", "Name 6")
 	assert.True(t, has)
 	assert.Equal(t, uint(6), row.ID)
 	assert.False(t, row.IsInitialised())
 
+	row = cachedSearchEntity{}
 	DBLogger.Entries = make([]*apexLog.Entry, 0)
 	has = engine.CachedSearchOne(&row, "IndexName", "Name 6")
 	assert.True(t, has)
 	assert.Equal(t, uint(6), row.ID)
 	assert.Len(t, DBLogger.Entries, 0)
 
+	row = cachedSearchEntity{}
 	has = engine.CachedSearchOneWithReferences(&row, "IndexName", []interface{}{"Name 4"}, []string{"ReferenceOne"})
 	assert.True(t, has)
 	assert.Equal(t, uint(4), row.ID)
