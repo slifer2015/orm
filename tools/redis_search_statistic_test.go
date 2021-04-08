@@ -10,7 +10,7 @@ import (
 
 func TestRedisSearchStatistics(t *testing.T) {
 	registry := &orm.Registry{}
-	registry.RegisterRedis("localhost:6383", 0)
+	registry.RegisterRedis("localhost:6381", 0)
 	registry.RegisterRedisSearchIndex(&orm.RedisSearchIndex{Name: "test", RedisPool: "default"})
 	validatedRegistry, err := registry.Validate()
 	assert.NoError(t, err)

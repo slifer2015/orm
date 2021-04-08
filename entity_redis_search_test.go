@@ -593,4 +593,13 @@ func TestEntityRedisSearch(t *testing.T) {
 
 	query.FilterInt("Balance", 700)
 	assert.False(t, engine.RedisSearchOne(entity, query))
+
+	entity = &redisSearchEntity{}
+	engine.LoadByID(1, entity)
+	entity.Age = 120
+	entity.Name = ""
+	engine.Flush(entity)
+	query = &RedisSearchQuery{}
+	query.FilterString("Name", "")
+	assert.True(t, engine.RedisSearchOne(entity, query))
 }

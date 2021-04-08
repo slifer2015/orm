@@ -115,7 +115,7 @@ func benchmarkLoadByIDsLocalCache(b *testing.B, lazy bool) {
 	engine := PrepareTables(nil, registry, 5, entity, ref)
 
 	ids := make([]uint64, 0)
-	for i := 1; i <= 1; i++ {
+	for i := 1; i <= 100; i++ {
 		e := &schemaEntity{}
 		e.Name = fmt.Sprintf("Name %d", i)
 		e.Uint32 = uint32(i)

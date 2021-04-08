@@ -746,9 +746,7 @@ func buildTableFields(t reflect.Type, registry *Registry, index *RedisSearchInde
 				} else {
 					stem, hasStem := tags["stem"]
 					index.AddTextField(prefix+f.Name, 1.0, hasSortable, !hasSearchable, !hasStem || stem != "true")
-					mapBindToRedisSearch[prefix+f.Name] = func(val interface{}) interface{} {
-						return EscapeRedisSearchString(val.(string))
-					}
+					mapBindToRedisSearch[prefix+f.Name] = defaultRedisSearchMapperNullableString
 				}
 			}
 			mapBindToScanPointer[prefix+f.Name] = func() interface{} {

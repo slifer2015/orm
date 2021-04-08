@@ -20,7 +20,7 @@ func PrepareTables(t *testing.T, registry *Registry, version int, entities ...En
 	registry.RegisterLocker("default", "default")
 	registry.RegisterRedis("localhost:6381", 15)
 	registry.RegisterRedis("localhost:6381", 14, "default_queue")
-	registry.RegisterRedis("localhost:6383", 0, "search")
+	registry.RegisterRedis("localhost:6381", 0, "search")
 	registry.RegisterLocalCache(1000)
 
 	registry.RegisterEntity(entities...)
@@ -52,14 +52,6 @@ func PrepareTables(t *testing.T, registry *Registry, version int, entities ...En
 		pool.CreateIndex(alter.Index)
 	}
 
-	altersSearch := engine.GetRedisSearchIndexAlters()
-	for _, alter := range altersSearch {
-		alter.Execute()
-	}
-	indexer := NewRedisSearchIndexer(engine)
-	indexer.DisableLoop()
-	indexer.Run(context.Background())
-
 	engine.GetMysql().Exec("SET FOREIGN_KEY_CHECKS = 0")
 	for _, entity := range entities {
 		eType := reflect.TypeOf(entity)
@@ -75,6 +67,15 @@ func PrepareTables(t *testing.T, registry *Registry, version int, entities ...En
 		}
 	}
 	engine.GetMysql().Exec("SET FOREIGN_KEY_CHECKS = 1")
+
+	altersSearch := engine.GetRedisSearchIndexAlters()
+	for _, alter := range altersSearch {
+		alter.Execute()
+	}
+	indexer := NewRedisSearchIndexer(engine)
+	indexer.DisableLoop()
+	indexer.Run(context.Background())
+
 	return engine
 }
 

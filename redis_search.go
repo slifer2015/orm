@@ -274,7 +274,11 @@ func (q *RedisSearchQuery) FilterString(field string, value ...string) *RedisSea
 	}
 	valueEscaped := make([]string, len(value))
 	for i, v := range value {
-		valueEscaped[i] = "\"" + EscapeRedisSearchString(v) + "\""
+		if v == "" {
+			valueEscaped[i] = "\"NULL\""
+		} else {
+			valueEscaped[i] = "\"" + EscapeRedisSearchString(v) + "\""
+		}
 	}
 	q.filtersString[field] = append(q.filtersString[field], valueEscaped)
 	return q
