@@ -507,11 +507,16 @@ func (q *RedisSearchQuery) SummarizeOptions(separator string, frags, len int) *R
 }
 
 func (r *RedisSearch) ForceReindex(index string) {
-	_, has := r.engine.registry.redisSearchIndexes[r.code][index]
+	def, has := r.engine.registry.redisSearchIndexes[r.code][index]
 	if !has {
 		panic(errors.Errorf("unknown index %s in pool %s", index, r.code))
 	}
-	r.redis.HSet(redisSearchForceIndexKey, index, "0:"+strconv.FormatInt(time.Now().UnixNano(), 10))
+	indexID := time.Now().UnixNano()
+	indexIDString := strconv.FormatInt(indexID, 10)
+	r.createIndex(def, uint64(indexID))
+	r.redis.HSet(redisSearchForceIndexKey, index, "0:"+indexIDString)
+	indexName := def.Name + ":" + indexIDString
+	r.aliasUpdate(def.Name, indexName)
 }
 
 func (r *RedisSearch) SearchRaw(index string, query *RedisSearchQuery, pager *Pager) (total uint64, rows []interface{}) {
@@ -780,7 +785,12 @@ func (r *RedisSearch) createIndexArgs(index *RedisSearchIndex, indexName string)
 
 func (r *RedisSearch) aliasUpdate(name, index string) {
 	cmd := redis.NewStringCmd(r.ctx, "FT.ALIASUPDATE", name, index)
+	start := time.Now()
 	err := r.redis.client.Process(r.ctx, cmd)
+	if r.engine.hasRedisLogger {
+		r.fillLogFields("[ORM][REDIS-SEARCH][FT.ALIASUPDATE]", start, "ft_alias_update", 1,
+			map[string]interface{}{"Index": index, "alias": name}, err)
+	}
 	checkError(err)
 }
 

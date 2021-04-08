@@ -559,6 +559,9 @@ func TestEntityRedisSearch(t *testing.T) {
 	assert.Equal(t, uint64(1), ids[0])
 
 	engine.GetRedis("search").FlushDB()
+	for _, alter := range engine.GetRedisSearchIndexAlters() {
+		alter.Execute()
+	}
 	indexer.Run(context.Background())
 	query = &RedisSearchQuery{}
 	query.Sort("Age", false)

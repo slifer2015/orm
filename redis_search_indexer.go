@@ -54,18 +54,12 @@ func (r *RedisSearchIndexer) consume(ctx context.Context) bool {
 					return true
 				}
 				stamp, has := stamps[index]
-				if !has {
-					stamp = "0:" + strconv.FormatInt(time.Now().UnixNano(), 10)
-				}
-				if stamp[0:3] == "ok:" {
+				if !has || stamp[0:3] == "ok:" {
 					continue
 				}
 				parts := strings.Split(stamp, ":")
 				id, _ := strconv.ParseUint(parts[0], 10, 64)
 				indexID, _ := strconv.ParseUint(parts[1], 10, 64)
-				search.createIndex(def, indexID)
-				indexName := def.Name + ":" + strconv.FormatUint(indexID, 10)
-
 				pusher := &redisSearchIndexPusher{pipeline: search.redis.PipeLine()}
 				for {
 					if canceled {
@@ -86,7 +80,6 @@ func (r *RedisSearchIndexer) consume(ctx context.Context) bool {
 					}
 
 					if !hasMore {
-						search.aliasUpdate(def.Name, indexName)
 						search.redis.HSet(redisSearchForceIndexKey, index, "ok:"+parts[1])
 						for _, oldName := range search.ListIndices() {
 							if strings.HasPrefix(oldName, def.Name+":") {

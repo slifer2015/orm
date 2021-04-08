@@ -22,7 +22,7 @@ func TestRedisSearchStatistics(t *testing.T) {
 	stats := GetRedisSearchStatistics(engine)
 	assert.Len(t, stats, 1)
 	assert.Equal(t, "test", stats[0].Index.Name)
-	assert.Len(t, stats[0].Versions, 0)
+	assert.Len(t, stats[0].Versions, 1)
 	assert.True(t, stats[0].ForceReindex)
 	assert.Equal(t, uint64(0), stats[0].ForceReindexLastID)
 	assert.Greater(t, stats[0].ForceReindexVersion, uint64(0))
