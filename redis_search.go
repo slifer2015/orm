@@ -1155,7 +1155,7 @@ func getRedisSearchAlters(engine *Engine) (alters []RedisSearchIndexAlter) {
 			}
 
 			if len(changes) > 0 {
-				alters = append(alters, search.addAlter(def, name, info.NumDocs, changes))
+				alters = append(alters, search.addAlter(def, info.NumDocs, changes))
 			}
 		}
 		for name, index := range engine.registry.redisSearchIndexes[poolName] {
@@ -1163,25 +1163,19 @@ func getRedisSearchAlters(engine *Engine) (alters []RedisSearchIndexAlter) {
 			if has {
 				continue
 			}
-			alters = append(alters, search.addAlter(index, name, 0, []string{"new index"}))
+			alters = append(alters, search.addAlter(index, 0, []string{"new index"}))
 		}
 	}
 	return alters
 }
 
-func (r *RedisSearch) addAlter(index *RedisSearchIndex, name string, documents uint64, changes []string) RedisSearchIndexAlter {
+func (r *RedisSearch) addAlter(index *RedisSearchIndex, documents uint64, changes []string) RedisSearchIndexAlter {
 	query := fmt.Sprintf("%v", r.createIndexArgs(index, index.Name))[1:]
 	query = query[0 : len(query)-1]
 	alter := RedisSearchIndexAlter{Pool: r.code, Query: query, Changes: changes, search: r}
-	stamp, indexing := r.redis.HGet(redisSearchForceIndexKey, name)
-	if !indexing || stamp[0:3] == "ok:" {
-		indexToAdd := index
-		alter.Execute = func() {
-			alter.search.ForceReindex(indexToAdd.Name)
-		}
-	} else {
-		alter.Executing = true
-		alter.Execute = func() {}
+	indexToAdd := index.Name
+	alter.Execute = func() {
+		alter.search.ForceReindex(indexToAdd)
 	}
 	alter.Documents = documents
 	return alter
