@@ -44,6 +44,7 @@ Menu:
  * [Event broker](https://github.com/latolukasz/orm#event-broker)
  * [Redis search](https://github.com/latolukasz/orm#redis-search)
  * [Tools](https://github.com/latolukasz/orm#tools)
+ * [Health check](https://github.com/latolukasz/orm#health-check)
 
 ## Configuration
 
@@ -1438,5 +1439,39 @@ func main() {
    tools.GetRedisStatistics(engine)
    // Redis search statistics	
    tools.GetRedisSearchStatistics(engine)
+}    
+```
+
+
+## Health check
+
+ORM provides special method that can be used to check that all database services are up and running.
+
+```go
+package main
+
+import (
+ "fmt"
+ "github.com/latolukasz/orm/tools"
+)
+
+func main() {
+ registry := &orm.Registry{}
+ registry.RegisterRedis("localhost:6383")
+ // register other services
+ validatedRegistry, _ := registry.Validate()
+ engine := validatedRegistry.CreateEngine()
+
+ errors, warnings, valid := engine.HealthCheck()
+ for _, err := range errors {
+    fmt.Printf("Error for step %s (%s): %s\n", err.Name, err.Description, err.Message)
+ }
+ for _, warn := range warnings {
+    fmt.Printf("Warning for step %s (%s): %s\n", warn.Name, warn.Description, warn.Message)
+ }
+ for _, step := range valid {
+    fmt.Printf("Warning for step %s (%s) passed\n", step.Name, step.Description)
+ }
+
 }    
 ```
