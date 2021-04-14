@@ -234,6 +234,9 @@ func (f *flusher) flush(root bool, lazy bool, transaction bool, entities ...Enti
 
 	for _, entity := range entities {
 		initIfNeeded(f.engine.registry, entity).initDBData()
+		if entity.IsLazy() {
+			panic(fmt.Errorf("lazy entity and can't be flushed: %v [%d]", entity.getORM().elem.Type().String(), entity.GetID()))
+		}
 		schema := entity.getORM().tableSchema
 		if !isInTransaction && schema.GetMysql(f.engine).inTransaction {
 			isInTransaction = true

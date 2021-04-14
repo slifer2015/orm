@@ -615,7 +615,7 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	assert.Equal(t, "1634", entitiesRefs[2].Name)
 }
 
-//17 allocs/op - 6 for Exec
+// 17 allocs/op - 6 for Exec
 func BenchmarkFlusherUpdateNoCache(b *testing.B) {
 	benchmarkFlusher(b, false, false)
 }
