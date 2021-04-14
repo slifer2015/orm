@@ -582,7 +582,7 @@ func TestEntityRedisSearch(t *testing.T) {
 	assert.Len(t, entities, 10)
 	assert.Equal(t, "dog 2", entities[0].Name)
 	assert.Equal(t, "dog 11", entities[9].Name)
-	assert.True(t, entities[0].IsInitialised())
+	assert.False(t, entities[0].IsLazy())
 
 	entities = make([]*redisSearchEntity, 0)
 	total = engine.RedisSearchLazy(&entities, query, NewPager(1, 10))
@@ -590,7 +590,7 @@ func TestEntityRedisSearch(t *testing.T) {
 	assert.Len(t, entities, 10)
 	assert.Equal(t, "dog 2", entities[0].GetFieldLazy("Name"))
 	assert.Equal(t, "dog 11", entities[9].GetFieldLazy("Name"))
-	assert.False(t, entities[0].IsInitialised())
+	assert.True(t, entities[0].IsLazy())
 
 	query.FilterInt("Age", 10)
 	assert.True(t, engine.RedisSearchOne(entity, query))
@@ -599,7 +599,7 @@ func TestEntityRedisSearch(t *testing.T) {
 	query.FilterInt("Age", 10)
 	assert.True(t, engine.RedisSearchOneLazy(entity, query))
 	assert.Equal(t, "dog 10", entity.GetFieldLazy("Name"))
-	assert.False(t, entity.IsInitialised())
+	assert.True(t, entity.IsLazy())
 
 	query.FilterInt("Balance", 700)
 	assert.False(t, engine.RedisSearchOne(entity, query))

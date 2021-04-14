@@ -53,7 +53,7 @@ func TestSearch(t *testing.T) {
 	assert.Equal(t, "name 1", entity.Name)
 	assert.Equal(t, "name 1", entity.ReferenceOne.Name)
 	assert.True(t, entity.ReferenceOne.IsLoaded())
-	assert.True(t, entity.ReferenceOne.IsInitialised())
+	assert.False(t, entity.ReferenceOne.IsLazy())
 
 	entity = &searchEntity{}
 	found = engine.SearchOneLazy(NewWhere("ID = ?", 1), entity, "ReferenceOne")
@@ -64,7 +64,7 @@ func TestSearch(t *testing.T) {
 	assert.Equal(t, "name 1", entity.GetFieldLazy("Name"))
 	assert.Equal(t, "name 1", entity.ReferenceOne.GetFieldLazy("Name"))
 	assert.True(t, entity.ReferenceOne.IsLoaded())
-	assert.False(t, entity.ReferenceOne.IsInitialised())
+	assert.True(t, entity.ReferenceOne.IsLazy())
 
 	engine.Search(NewWhere("ID > 0"), nil, &rows, "ReferenceOne")
 	assert.Len(t, rows, 10)
@@ -72,7 +72,7 @@ func TestSearch(t *testing.T) {
 	assert.Equal(t, "name 1", rows[0].Name)
 	assert.Equal(t, "name 1", rows[0].ReferenceOne.Name)
 	assert.True(t, rows[0].ReferenceOne.IsLoaded())
-	assert.True(t, rows[0].ReferenceOne.IsInitialised())
+	assert.False(t, rows[0].ReferenceOne.IsLazy())
 
 	engine.SearchLazy(NewWhere("ID > 0"), nil, &rows, "ReferenceOne")
 	assert.Len(t, rows, 10)
@@ -82,17 +82,17 @@ func TestSearch(t *testing.T) {
 	assert.Equal(t, "name 1", rows[0].GetFieldLazy("Name"))
 	assert.Equal(t, "name 1", rows[0].ReferenceOne.GetFieldLazy("Name"))
 	assert.True(t, rows[0].ReferenceOne.IsLoaded())
-	assert.False(t, rows[0].ReferenceOne.IsInitialised())
+	assert.True(t, rows[0].ReferenceOne.IsLazy())
 
 	total := engine.SearchWithCount(NewWhere("ID > 2"), nil, &rows)
 	assert.Equal(t, 8, total)
 	assert.Len(t, rows, 8)
-	assert.True(t, rows[0].IsInitialised())
+	assert.False(t, rows[0].IsLazy())
 
 	total = engine.SearchWithCountLAzy(NewWhere("ID > 2"), nil, &rows)
 	assert.Equal(t, 8, total)
 	assert.Len(t, rows, 8)
-	assert.False(t, rows[0].IsInitialised())
+	assert.True(t, rows[0].IsLazy())
 
 	ids, total := engine.SearchIDsWithCount(NewWhere("ID > 2"), nil, entity)
 	assert.Equal(t, 8, total)

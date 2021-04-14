@@ -20,8 +20,8 @@ type Entity interface {
 	markToDelete()
 	forceMarkToDelete()
 	IsLoaded() bool
-	IsInitialised() bool
-	Init(engine *Engine)
+	IsLazy() bool
+	Fill(engine *Engine)
 	IsDirty() bool
 	GetDirtyBind() (bind Bind, has bool)
 	SetOnDuplicateKeyUpdate(bind Bind)
@@ -86,11 +86,11 @@ func (orm *ORM) IsLoaded() bool {
 	return orm.loaded
 }
 
-func (orm *ORM) IsInitialised() bool {
-	return !orm.lazy
+func (orm *ORM) IsLazy() bool {
+	return orm.lazy
 }
 
-func (orm *ORM) Init(engine *Engine) {
+func (orm *ORM) Fill(engine *Engine) {
 	if orm.lazy && orm.loaded {
 		fillStruct(engine.registry, 0, orm.dBData, orm.tableSchema.fields, orm, orm.elem)
 		orm.lazy = false

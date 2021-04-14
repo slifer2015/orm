@@ -86,9 +86,9 @@ func testLoadByIds(t *testing.T, local, redis bool) {
 	assert.True(t, missing)
 	assert.Len(t, rows, 4)
 	assert.Equal(t, "", rows[0].Name)
-	assert.False(t, rows[0].IsInitialised())
-	assert.False(t, rows[1].IsInitialised())
-	assert.False(t, rows[2].IsInitialised())
+	assert.True(t, rows[0].IsLazy())
+	assert.True(t, rows[1].IsLazy())
+	assert.True(t, rows[2].IsLazy())
 	assert.Nil(t, rows[3])
 	assert.Equal(t, "a", rows[0].GetFieldLazy("Name"))
 	assert.Equal(t, "", rows[0].ReferenceOne.Name)
@@ -150,6 +150,7 @@ func benchmarkLoadByIDsLocalCache(b *testing.B, lazy bool) {
 	ids := make([]uint64, 0)
 	for i := 1; i <= 1; i++ {
 		e := &schemaEntity{}
+		e.GetID()
 		e.Name = fmt.Sprintf("Name %d", i)
 		e.Uint32 = uint32(i)
 		e.Int32 = int32(i)
