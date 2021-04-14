@@ -80,6 +80,27 @@ func (c *LocalCache) MGet(keys ...string) map[string]interface{} {
 	return results
 }
 
+func (c *LocalCache) MGetFast(keys ...string) []interface{} {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	start := time.Now()
+	results := make([]interface{}, len(keys))
+	misses := 0
+	for i, key := range keys {
+		value, ok := c.lru.Get(key)
+		if !ok {
+			misses++
+			value = nil
+		}
+		results[i] = value
+	}
+	if c.engine.hasLocalCacheLogger {
+		c.fillLogFields("[ORM][LOCAL][MGET]", start, "mget", misses, map[string]interface{}{"Keys": keys})
+	}
+	return results
+}
+
 func (c *LocalCache) Set(key string, value interface{}) {
 	start := time.Now()
 	c.m.Lock()

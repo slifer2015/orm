@@ -944,6 +944,18 @@ func (tableSchema *tableSchema) getCacheKey(id uint64) string {
 	return tableSchema.cachePrefix + ":" + strconv.FormatUint(id, 10)
 }
 
+func (tableSchema *tableSchema) newEntity() Entity {
+	val := reflect.New(tableSchema.t)
+	e := val.Interface().(Entity)
+	orm := e.getORM()
+	orm.initialised = true
+	orm.tableSchema = tableSchema
+	orm.value = val
+	orm.elem = val.Elem()
+	orm.idElem = orm.elem.Field(1)
+	return e
+}
+
 func (fields *tableFields) getColumnNames() []string {
 	columns := make([]string, 0)
 	ids := fields.uintegers

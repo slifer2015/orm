@@ -527,12 +527,12 @@ func (e *Engine) load(entity Entity, lazy bool, references ...string) {
 	}
 }
 
-func (e *Engine) LoadByIDs(ids []uint64, entities interface{}, references ...string) (missing []uint64) {
+func (e *Engine) LoadByIDs(ids []uint64, entities interface{}, references ...string) (missing bool) {
 	missing, _ = tryByIDs(e, ids, reflect.ValueOf(entities).Elem(), references, false)
 	return missing
 }
 
-func (e *Engine) LoadByIDsLazy(ids []uint64, entities interface{}, references ...string) (missing []uint64) {
+func (e *Engine) LoadByIDsLazy(ids []uint64, entities interface{}, references ...string) (missing bool) {
 	missing, _ = tryByIDs(e, ids, reflect.ValueOf(entities).Elem(), references, true)
 	return missing
 }

@@ -467,6 +467,25 @@ func (r *RedisCache) MGet(keys ...string) map[string]interface{} {
 	return results
 }
 
+func (r *RedisCache) MGetFast(keys ...string) []interface{} {
+	start := time.Now()
+	val, err := r.client.MGet(r.ctx, keys...).Result()
+	results := make([]interface{}, len(keys))
+	misses := 0
+	for i, v := range val {
+		results[i] = v
+		if v == nil {
+			misses++
+		}
+	}
+	if r.engine.hasRedisLogger {
+		r.fillLogFields("[ORM][REDIS][MGET]", start, "mget", misses, len(keys),
+			map[string]interface{}{"Keys": keys}, err)
+	}
+	checkError(err)
+	return results
+}
+
 func (r *RedisCache) SAdd(key string, members ...interface{}) int64 {
 	start := time.Now()
 	val, err := r.client.SAdd(r.ctx, key, members...).Result()

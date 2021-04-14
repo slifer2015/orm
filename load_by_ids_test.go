@@ -27,37 +27,69 @@ type loadByIdsSubReference struct {
 	Name string
 }
 
-func TestLoadByIds(t *testing.T) {
+func TestLoadByIdsNoCache(t *testing.T) {
+	testLoadByIds(t, false, false)
+}
+
+func TestLoadByIdsLocalCache(t *testing.T) {
+	testLoadByIds(t, true, false)
+}
+
+func TestLoadByIdsRedisCache(t *testing.T) {
+	testLoadByIds(t, false, true)
+}
+
+func TestLoadByIdsLocalRedisCache(t *testing.T) {
+	testLoadByIds(t, true, true)
+}
+
+func testLoadByIds(t *testing.T, local, redis bool) {
 	var entity *loadByIdsEntity
 	var reference *loadByIdsReference
 	var subReference *loadByIdsSubReference
 	engine := PrepareTables(t, &Registry{}, 5, entity, reference, subReference)
+	schema := engine.GetRegistry().GetTableSchemaForEntity(entity).(*tableSchema)
+	if local {
+		schema.localCacheName = "default"
+		schema.hasLocalCache = true
+	} else {
+		schema.localCacheName = ""
+		schema.hasLocalCache = false
+	}
+	if redis {
+		schema.redisCacheName = "default"
+		schema.hasRedisCache = true
+	} else {
+		schema.redisCacheName = ""
+		schema.hasRedisCache = false
+	}
 
 	engine.FlushMany(&loadByIdsEntity{Name: "a", ReferenceOne: &loadByIdsReference{Name: "r1", ReferenceTwo: &loadByIdsSubReference{Name: "s1"}}},
 		&loadByIdsEntity{Name: "b", ReferenceOne: &loadByIdsReference{Name: "r2", ReferenceTwo: &loadByIdsSubReference{Name: "s2"}}},
 		&loadByIdsEntity{Name: "c"})
 
 	var rows []*loadByIdsEntity
+
 	missing := engine.LoadByIDs([]uint64{1, 2, 3, 4}, &rows, "*")
-	assert.Len(t, missing, 1)
-	assert.Equal(t, uint64(4), missing[0])
-	assert.Len(t, rows, 3)
+	assert.True(t, missing)
+	assert.Len(t, rows, 4)
 	assert.Equal(t, "a", rows[0].Name)
 	assert.Equal(t, "r1", rows[0].ReferenceOne.Name)
 	assert.Equal(t, "b", rows[1].Name)
 	assert.Equal(t, "r2", rows[1].ReferenceOne.Name)
 	assert.Equal(t, "c", rows[2].Name)
+	assert.Nil(t, rows[3])
 	missing = engine.LoadByIDs([]uint64{1, 2, 3, 4}, &rows, "*")
-	assert.Len(t, missing, 1)
+	assert.True(t, missing)
 
 	missing = engine.LoadByIDsLazy([]uint64{1, 2, 3, 4}, &rows, "*")
-	assert.Len(t, missing, 1)
-	assert.Equal(t, uint64(4), missing[0])
-	assert.Len(t, rows, 3)
+	assert.True(t, missing)
+	assert.Len(t, rows, 4)
 	assert.Equal(t, "", rows[0].Name)
 	assert.False(t, rows[0].IsInitialised())
 	assert.False(t, rows[1].IsInitialised())
 	assert.False(t, rows[2].IsInitialised())
+	assert.Nil(t, rows[3])
 	assert.Equal(t, "a", rows[0].GetFieldLazy("Name"))
 	assert.Equal(t, "", rows[0].ReferenceOne.Name)
 	assert.Equal(t, "r1", rows[0].ReferenceOne.GetFieldLazy("Name"))
@@ -68,19 +100,20 @@ func TestLoadByIds(t *testing.T) {
 	assert.Equal(t, "", rows[2].Name)
 	assert.Equal(t, "c", rows[2].GetFieldLazy("Name"))
 	missing = engine.LoadByIDsLazy([]uint64{1, 2, 3, 4}, &rows, "*")
-	assert.Len(t, missing, 1)
+	assert.True(t, missing)
 
 	missing = engine.LoadByIDs([]uint64{1, 2, 3, 4}, &rows, "ReferenceOne/ReferenceTwo")
-	assert.Len(t, missing, 1)
-	assert.Len(t, rows, 3)
+	assert.True(t, missing)
+	assert.Len(t, rows, 4)
 	assert.Equal(t, "a", rows[0].Name)
 	assert.Equal(t, "r1", rows[0].ReferenceOne.Name)
 	assert.Equal(t, "b", rows[1].Name)
 	assert.Equal(t, "r2", rows[1].ReferenceOne.Name)
 	assert.Equal(t, "c", rows[2].Name)
+	assert.Nil(t, rows[3])
 
 	missing = engine.LoadByIDs([]uint64{3}, &rows, "ReferenceOne/ReferenceTwo")
-	assert.Len(t, missing, 0)
+	assert.False(t, missing)
 
 	assert.PanicsWithError(t, "reference invalid in loadByIdsEntity is not valid", func() {
 		engine.LoadByIDs([]uint64{1}, &rows, "invalid")
@@ -96,12 +129,12 @@ func TestLoadByIds(t *testing.T) {
 	})
 }
 
-// BenchmarkLoadByIDsdLocalCache-12    	  484204	      2144 ns/op	    1272 B/op	      11 allocs/op
+// BenchmarkLoadByIDsdLocalCache-12    	  505929	      2110 ns/op	     952 B/op	      10 allocs/op
 func BenchmarkLoadByIDsdLocalCache(b *testing.B) {
 	benchmarkLoadByIDsLocalCache(b, false)
 }
 
-// BenchmarkLoadByIDsLocalCacheLazy-12    	  943807	      1136 ns/op	    1032 B/op	       7 allocs/op
+// BenchmarkLoadByIDsLocalCacheLazy-12    	 1360686	       856.5 ns/op	     712 B/op	       6 allocs/op
 func BenchmarkLoadByIDsLocalCacheLazy(b *testing.B) {
 	benchmarkLoadByIDsLocalCache(b, true)
 }
@@ -115,7 +148,7 @@ func benchmarkLoadByIDsLocalCache(b *testing.B, lazy bool) {
 	engine := PrepareTables(nil, registry, 5, entity, ref)
 
 	ids := make([]uint64, 0)
-	for i := 1; i <= 100; i++ {
+	for i := 1; i <= 1; i++ {
 		e := &schemaEntity{}
 		e.Name = fmt.Sprintf("Name %d", i)
 		e.Uint32 = uint32(i)

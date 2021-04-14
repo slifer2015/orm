@@ -12,6 +12,6 @@ func TestHealthCheck(t *testing.T) {
 	errors, warnings, valid := engine.HealthCheck()
 	assert.NotNil(t, valid)
 	assert.Nil(t, errors)
-	assert.Nil(t, warnings)
-	assert.Len(t, valid, 4)
+	assert.Len(t, warnings, 1)
+	assert.Len(t, valid, 3)
 }

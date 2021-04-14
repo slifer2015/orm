@@ -39,11 +39,12 @@ func TestSearch(t *testing.T) {
 
 	var rows []*searchEntity
 	missing := engine.LoadByIDs([]uint64{1, 2, 20}, &rows)
-	assert.Len(t, missing, 1)
-	assert.Len(t, rows, 2)
-	assert.Equal(t, uint64(20), missing[0])
+	assert.True(t, missing)
+	assert.Len(t, rows, 3)
+	assert.True(t, missing)
 	assert.Equal(t, uint(1), rows[0].ID)
 	assert.Equal(t, uint(2), rows[1].ID)
+	assert.Nil(t, rows[2])
 
 	entity = &searchEntity{}
 	found := engine.SearchOne(NewWhere("ID = ?", 1), entity, "ReferenceOne")
