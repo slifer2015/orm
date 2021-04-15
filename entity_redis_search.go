@@ -21,6 +21,12 @@ func (e *Engine) RedisSearchLazy(entities interface{}, query *RedisSearchQuery, 
 	return e.redisSearchBase(entities, query, pager, true, references...)
 }
 
+func (e *Engine) RedisSearchCount(entity Entity, query *RedisSearchQuery) (totalRows uint64) {
+	schema := e.GetRegistry().GetTableSchemaForEntity(entity).(*tableSchema)
+	_, totalRows = redisSearch(e, schema, query, NewPager(0, 0), nil)
+	return totalRows
+}
+
 func (e *Engine) redisSearchBase(entities interface{}, query *RedisSearchQuery, pager *Pager, lazy bool, references ...string) (totalRows uint64) {
 	elem := reflect.ValueOf(entities).Elem()
 	_, has, name := getEntityTypeForSlice(e.registry, elem.Type(), true)
