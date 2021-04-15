@@ -16,7 +16,7 @@ import (
 
 func TestRedis(t *testing.T) {
 	registry := &Registry{}
-	registry.RegisterRedis("localhost:6381", 15)
+	registry.RegisterRedis("localhost:6382", 15)
 	registry.RegisterRedisStream("test-stream", "default", []string{"test-group"})
 	registry.RegisterRedisStream("test-stream-a", "default", []string{"test-group"})
 	registry.RegisterRedisStream("test-stream-b", "default", []string{"test-group"})

@@ -32,7 +32,7 @@ jobs:
       redis:
         image: redislabs/redisearch
         ports:
-          - 6381:6379
+          - 6382:6379
         options: --entrypoint redis-server
       mysql:
         image: mysql:5.7

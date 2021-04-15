@@ -9,8 +9,8 @@ import (
 
 func TestRedisStatistics(t *testing.T) {
 	registry := &orm.Registry{}
-	registry.RegisterRedis("localhost:6381", 15)
-	registry.RegisterRedis("localhost:6381", 14, "another")
+	registry.RegisterRedis("localhost:6382", 15)
+	registry.RegisterRedis("localhost:6382", 14, "another")
 	validatedRegistry, err := registry.Validate()
 	assert.NoError(t, err)
 	engine := validatedRegistry.CreateEngine()

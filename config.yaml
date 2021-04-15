@@ -1,7 +1,7 @@
 default:
   mysqlEncoding: utf8
   mysql: root:root@tcp(localhost:3308)/test
-  redis: localhost:6381:0
+  redis: localhost:6382:0
   streams:
     stream-1:
       - test-group-1
@@ -23,4 +23,4 @@ another:
       stream-3:
         - test-group-1
 default_queue:
-  redis: localhost:6381:1
+  redis: localhost:6382:1
