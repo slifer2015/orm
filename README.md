@@ -26,6 +26,7 @@ Menu:
  * [Transactions](https://github.com/latolukasz/orm#transactions) 
  * [Loading entities using primary key](https://github.com/latolukasz/orm#loading-entities-using-primary-key) 
  * [Loading entities using search](https://github.com/latolukasz/orm#loading-entities-using-search) 
+ * [Lazy loading](https://github.com/latolukasz/orm#lazy-loading)
  * [Reference one to one](https://github.com/latolukasz/orm#reference-one-to-one) 
  * [Cached queries](https://github.com/latolukasz/orm#cached-queries) 
  * [Lazy flush](https://github.com/latolukasz/orm#lazy-flush)
@@ -483,7 +484,7 @@ func main() {
 
     var entity testEntity
     has := engine.LoadByID(1, &entity)
-
+    
     var entities []*testEntity
     missing := engine.LoadByIDs([]uint64{1, 3, 4}, &entities) //missing contains IDs that are missing in database
 
@@ -520,6 +521,74 @@ func main() {
     ids, totalRows = engine.SearchIDsWithCount(where, pager, entity)
 }
 
+```
+
+## Lazy loading
+
+Loading entities is very fast. But if you need to load many entities you can make it even faster
+using lazy loading. Simply use methods that ends with "Lazy". Such methods are many times faster and
+use less memory and allocations because struct fields are not filled with data. See example below
+
+```go
+func main() {
+
+ var entities []*testEntity
+ // load 1000 entities
+ total := 0
+ engine.SearchLazy(orm.NewWhere("1"), orm.NewPager(1, 1000), &entities)
+ for _, e := range entities {
+  e.IsLazy() // true
+  e.Balance // always zero, it's not filled with DB data
+  total += e.GetFieldLazy("Balance").(uint64) // returns data from DB
+ }
+ fmt.Printf("Amount: %d\n", total)
+
+}
+```
+
+Field type mapping:
+
+| Field type  | Lazy type | 
+|---|---|
+| *uint,*uint8,*uint16,*uint32,*uint64    | uint64,nil  |
+| *int,*int8,*int16,*int32,*int64    | int64,nil  |
+| uint,uint8,uint16,uint32,uint64    | uint64  |
+| int,int8,int16,int32,int64    | int64  |
+| string    | string,nil  |
+| []string    | []string,nil  |
+| FakeDelete    | bool  |
+| bool    | bool  |
+| *bool    | bool,nil  |
+| *float32,*float64    | float64,nil  |
+| float32,float64    | float64  |
+| *time.Time    | time.Time,nil  |
+| time.Time   | time.Time  |
+| struct   | string (encoded json),nil  |
+| *orm.Entity   | uint64,nil  |
+| []*orm.Entity   | string (encoded json of []uint64),nil  |
+
+
+Lazy entity can't be edited and flushed. But you can use *Fill* method to manage that:
+
+```go
+func main() {
+
+ var entities []*testEntity
+ // load 1000 entities
+ total := 0
+ engine.SearchLazy(orm.NewWhere("1"), orm.NewPager(1, 1000), &entities)
+ for _, e := range entities {
+    e.IsLazy() // true
+    if e.GetFieldLazy("Old").bool {
+        e.Fill(engine)
+        e.IsLazy() // false
+        e.Balance // holds data from DB now
+        e.Old = false
+        engine.Flush(e)
+    }           
+ }
+
+}
 ```
 
 ## Reference one to one
