@@ -46,7 +46,7 @@ func (r *RedisCache) GetSet(key string, ttlSeconds int, provider GetSetProvider)
 		return userVal
 	}
 	var data interface{}
-	_ = jsoniter.ConfigFastest.Unmarshal([]byte(val), &data)
+	_ = jsoniter.ConfigFastest.UnmarshalFromString(val, &data)
 	return data
 }
 

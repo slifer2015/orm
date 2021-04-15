@@ -783,7 +783,7 @@ func (orm *ORM) fillBind(id uint64, bind Bind, updateBind map[string]string, tab
 			if hasOld && old != nil && old != "" {
 				oldMap := reflect.New(field.Type()).Interface()
 				newMap := reflect.New(field.Type()).Interface()
-				_ = jsoniter.ConfigFastest.Unmarshal([]byte(old.(string)), oldMap)
+				_ = jsoniter.ConfigFastest.UnmarshalFromString(old.(string), oldMap)
 				oldValue := reflect.ValueOf(oldMap).Elem().Interface()
 				encoded, _ = jsoniter.ConfigFastest.Marshal(value)
 				_ = jsoniter.ConfigFastest.Unmarshal(encoded, newMap)

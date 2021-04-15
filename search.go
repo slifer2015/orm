@@ -564,7 +564,7 @@ func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, f
 		field := value.Field(i)
 		if data[index] != nil {
 			f := reflect.New(field.Type()).Interface()
-			_ = jsoniter.ConfigFastest.Unmarshal([]byte(data[index].(string)), f)
+			_ = jsoniter.ConfigFastest.UnmarshalFromString(data[index].(string), f)
 			field.Set(reflect.ValueOf(f).Elem())
 		} else if !field.IsZero() {
 			field.Set(reflect.Zero(field.Type()))
@@ -599,7 +599,7 @@ func fillStruct(registry *validatedRegistry, index uint16, data []interface{}, f
 		length := 0
 		if data[index] != nil {
 			f = make([]uint64, 0)
-			_ = jsoniter.ConfigFastest.Unmarshal([]byte(data[index].(string)), &f)
+			_ = jsoniter.ConfigFastest.UnmarshalFromString(data[index].(string), &f)
 			length = len(f)
 		}
 		refType := fields.refsManyTypes[k]

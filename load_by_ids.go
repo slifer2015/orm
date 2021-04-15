@@ -113,7 +113,7 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 						k = cacheMap[k]
 					}
 					var decoded []interface{}
-					_ = jsoniter.ConfigFastest.Unmarshal([]byte(val.(string)), &decoded)
+					_ = jsoniter.ConfigFastest.UnmarshalFromString(val.(string), &decoded)
 					convertDataFromJSON(schema.fields, 0, decoded)
 					e := schema.newEntity()
 					newSlice.Index(k).Set(e.getORM().value)
@@ -286,7 +286,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 				}
 				if manyRef {
 					ids := make([]uint64, 0)
-					_ = jsoniter.ConfigFastest.Unmarshal([]byte(idVal.(string)), &ids)
+					_ = jsoniter.ConfigFastest.UnmarshalFromString(idVal.(string), &ids)
 					length := len(ids)
 					slice := reflect.MakeSlice(reflect.SliceOf(ref.Type().Elem()), length, length)
 					for k, id := range ids {
@@ -380,7 +380,7 @@ func warmUpReferences(engine *Engine, schema *tableSchema, rows reflect.Value, r
 			if fromCache != nil {
 				schema := v[key][0].(Entity).getORM().tableSchema
 				decoded := make([]interface{}, len(schema.columnNames))
-				_ = jsoniter.ConfigFastest.Unmarshal([]byte(fromCache.(string)), &decoded)
+				_ = jsoniter.ConfigFastest.UnmarshalFromString(fromCache.(string), &decoded)
 				convertDataFromJSON(schema.fields, 0, decoded)
 				for _, r := range v[key] {
 					fillFromDBRow(decoded[0].(uint64), engine, decoded, r, false, lazy)

@@ -64,7 +64,7 @@ func (ev *event) Unserialize(value interface{}) error {
 	if !has {
 		return fmt.Errorf("event without struct data")
 	}
-	return jsoniter.ConfigFastest.Unmarshal([]byte(val.(string)), &value)
+	return jsoniter.ConfigFastest.UnmarshalFromString(val.(string), &value)
 }
 
 func (ev *event) IsSerialized() bool {

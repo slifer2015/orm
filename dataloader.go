@@ -221,7 +221,7 @@ func (b *dataLoaderBatch) getKeysForNils(l *dataLoader, schema *tableSchema, row
 				resultsKeys[k] = nil
 			} else {
 				var decoded []interface{}
-				_ = jsoniter.ConfigFastest.Unmarshal([]byte(v.(string)), &decoded)
+				_ = jsoniter.ConfigFastest.UnmarshalFromString(v.(string), &decoded)
 				convertDataFromJSON(schema.fields, 0, decoded)
 				resultsKeys[k] = decoded
 				results[l.key(schema, keyMapping[k])] = decoded

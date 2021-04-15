@@ -54,7 +54,7 @@ func loadByID(engine *Engine, id uint64, entity Entity, useCache bool, lazy bool
 					return false, schema
 				}
 				decoded := make([]interface{}, len(schema.columnNames))
-				_ = jsoniter.ConfigFastest.Unmarshal([]byte(row), &decoded)
+				_ = jsoniter.ConfigFastest.UnmarshalFromString(row, &decoded)
 				convertDataFromJSON(schema.fields, 0, decoded)
 				fillFromDBRow(id, engine, decoded, entity, false, lazy)
 				if len(references) > 0 {
