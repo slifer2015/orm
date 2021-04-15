@@ -197,11 +197,12 @@ func TestRedisSearch(t *testing.T) {
 
 	//engine.EnableQueryDebug()
 	query = &RedisSearchQuery{}
-	query.FilterInt("id", 34)
+	query.FilterInt("id", 34, 37)
 	total, rows = search.Search("test2", query, NewPager(1, 2))
-	assert.Equal(t, uint64(1), total)
-	assert.Len(t, rows, 1)
+	assert.Equal(t, uint64(2), total)
+	assert.Len(t, rows, 2)
 	assert.Equal(t, "test2:34", rows[0].Key)
+	assert.Equal(t, "test2:37", rows[1].Key)
 
 	query = &RedisSearchQuery{}
 	query.FilterIntMinMax("id", 33, 35).FilterIntMinMax("number_signed", -10, 5)
@@ -480,4 +481,29 @@ func TestRedisSearch(t *testing.T) {
 	total, rows = search.Search("test2", query, NewPager(1, 10))
 	assert.Equal(t, uint64(1), total)
 	assert.Equal(t, "adam@gmail.com", rows[0].Value("title"))
+
+	pusher.NewDocument("test2:201")
+	pusher.SetString("title", "tom has big house")
+	pusher.SetInt("id", 201)
+	pusher.PushDocument()
+	pusher.NewDocument("test2:202")
+	pusher.SetString("title", "tom has small house")
+	pusher.SetInt("id", 202)
+	pusher.PushDocument()
+	pusher.Flush()
+
+	query = &RedisSearchQuery{}
+	query.FilterString("title", "has house")
+	total, _ = search.Search("test2", query, NewPager(1, 10))
+	assert.Equal(t, uint64(0), total)
+
+	query = &RedisSearchQuery{}
+	query.FilterString("title", "has big house")
+	total, _ = search.Search("test2", query, NewPager(1, 10))
+	assert.Equal(t, uint64(1), total)
+
+	query = &RedisSearchQuery{}
+	query.QueryField("title", "has house")
+	total, _ = search.Search("test2", query, NewPager(1, 10))
+	assert.Equal(t, uint64(2), total)
 }

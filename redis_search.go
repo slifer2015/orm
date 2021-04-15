@@ -244,8 +244,11 @@ func (q *RedisSearchQuery) FilterIntMinMax(field string, min, max int64) *RedisS
 	return q.filterNumericMinMax(field, strconv.FormatInt(min, 10), strconv.FormatInt(max, 10))
 }
 
-func (q *RedisSearchQuery) FilterInt(field string, value int64) *RedisSearchQuery {
-	return q.FilterIntMinMax(field, value, value)
+func (q *RedisSearchQuery) FilterInt(field string, value ...int64) *RedisSearchQuery {
+	for _, val := range value {
+		q.FilterIntMinMax(field, val, val)
+	}
+	return q
 }
 
 func (q *RedisSearchQuery) FilterIntNull(field string) *RedisSearchQuery {
@@ -269,6 +272,17 @@ func (q *RedisSearchQuery) FilterIntLess(field string, value int64) *RedisSearch
 }
 
 func (q *RedisSearchQuery) FilterString(field string, value ...string) *RedisSearchQuery {
+	return q.filterString(field, true, value...)
+}
+
+func (q *RedisSearchQuery) QueryField(field string, value ...string) *RedisSearchQuery {
+	return q.filterString(field, false, value...)
+}
+
+func (q *RedisSearchQuery) filterString(field string, exactPhrase bool, value ...string) *RedisSearchQuery {
+	if len(value) == 0 {
+		return q
+	}
 	if q.filtersString == nil {
 		q.filtersString = make(map[string][][]string)
 	}
@@ -277,7 +291,11 @@ func (q *RedisSearchQuery) FilterString(field string, value ...string) *RedisSea
 		if v == "" {
 			valueEscaped[i] = "\"NULL\""
 		} else {
-			valueEscaped[i] = "\"" + EscapeRedisSearchString(v) + "\""
+			if exactPhrase {
+				valueEscaped[i] = "\"" + EscapeRedisSearchString(v) + "\""
+			} else {
+				valueEscaped[i] = EscapeRedisSearchString(v)
+			}
 		}
 	}
 	q.filtersString[field] = append(q.filtersString[field], valueEscaped)
@@ -289,8 +307,11 @@ func (q *RedisSearchQuery) FilterFloatMinMax(field string, min, max float64) *Re
 		strconv.FormatFloat(max+0.00001, 'f', -1, 64))
 }
 
-func (q *RedisSearchQuery) FilterFloat(field string, value float64) *RedisSearchQuery {
-	return q.FilterFloatMinMax(field, value, value)
+func (q *RedisSearchQuery) FilterFloat(field string, value ...float64) *RedisSearchQuery {
+	for _, val := range value {
+		q.FilterFloatMinMax(field, val, val)
+	}
+	return q
 }
 
 func (q *RedisSearchQuery) FilterFloatGreaterEqual(field string, value float64) *RedisSearchQuery {
