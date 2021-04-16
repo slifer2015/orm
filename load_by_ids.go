@@ -164,7 +164,9 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 			newSlice.Index(k).Set(e.getORM().value)
 			fillFromDBRow(id, engine, pointers, e, true, lazy)
 			if hasCache {
-				cacheKey := cacheKeys[k]
+				// TODO not working
+				//cacheKey := cacheKeys[k]
+				cacheKey := schema.getCacheKey(id)
 				if hasLocalCache {
 					localCacheToSet = append(localCacheToSet, cacheKey, buildLocalCacheValue(pointers))
 				}
