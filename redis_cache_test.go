@@ -41,7 +41,7 @@ func testRedis(t *testing.T, engine *Engine) {
 	r := engine.GetRedis()
 
 	testLogger := memory.New()
-	engine.AddQueryLogger(testLogger, apexLog.InfoLevel, QueryLoggerSourceRedis)
+	engine.AddQueryLogger(testLogger, apexLog.InfoLevel, QueryLoggerSourceRedis, QueryLoggerSourceStreams)
 	r.FlushDB()
 	testLogger.Entries = make([]*apexLog.Entry, 0)
 
@@ -167,6 +167,9 @@ func testRedis(t *testing.T, engine *Engine) {
 	assert.Equal(t, int64(1), r.XLen("test-stream"))
 	assert.Equal(t, int64(1), r.XTrim("test-stream", 0, false))
 	assert.Equal(t, int64(0), r.XLen("test-stream"))
+	engine.GetEventBroker().PublishMap("test-stream", EventAsMap{"name": "a", "code": "b"})
+	assert.Equal(t, int64(1), r.XTrim("test-stream", 0, true))
+	assert.Equal(t, int64(0), r.XLen("test-stream"))
 
 	engine.GetEventBroker().PublishMap("test-stream", EventAsMap{"name": "a1", "code": "b1"})
 	engine.GetEventBroker().PublishMap("test-stream", EventAsMap{"name": "a2", "code": "b2"})
@@ -200,6 +203,27 @@ func testRedis(t *testing.T, engine *Engine) {
 	assert.Equal(t, "0-0", infoGroups[0].LastDeliveredID)
 	assert.Equal(t, int64(0), infoGroups[0].Consumers)
 	assert.Equal(t, int64(0), infoGroups[0].Pending)
+
+	events := r.XRange("test-stream", "-", "+", 2)
+	assert.Len(t, events, 2)
+	assert.Equal(t, "a1", events[0].Values["name"])
+	assert.Equal(t, "a2", events[1].Values["name"])
+
+	infoGroups = r.XInfoGroups("test-stream-invalid")
+	assert.Len(t, infoGroups, 0)
+
+	events = r.XRevRange("test-stream", "+", "-", 2)
+	assert.Len(t, events, 2)
+	assert.Equal(t, "a5", events[0].Values["name"])
+	assert.Equal(t, "a4", events[1].Values["name"])
+
+	tmpEventID := engine.GetEventBroker().PublishMap("test-stream", EventAsMap{"name": "new"})
+	assert.Equal(t, int64(1), r.XDel("test-stream", tmpEventID))
+	events = r.XRevRange("test-stream", "+", "-", 2)
+	assert.Len(t, events, 2)
+	assert.Equal(t, "a5", events[0].Values["name"])
+	assert.Equal(t, "a4", events[1].Values["name"])
+
 	streams := r.XReadGroup(&redis.XReadGroupArgs{Group: "test-group", Streams: []string{"test-stream", ">"},
 		Consumer: "test-consumer"})
 	assert.Len(t, streams, 1)
