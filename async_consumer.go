@@ -40,14 +40,19 @@ type AsyncConsumer struct {
 	errorHandler      ConsumerErrorHandler
 	logLogger         func(log *LogQueueValue)
 	redisFlusher      RedisFlusher
+	limit             int
 }
 
 func NewAsyncConsumer(engine *Engine, name string) *AsyncConsumer {
-	return &AsyncConsumer{engine: engine, name: name, block: time.Minute, redisFlusher: engine.NewRedisFlusher()}
+	return &AsyncConsumer{engine: engine, name: name, block: time.Minute, limit: 1, redisFlusher: engine.NewRedisFlusher()}
 }
 
 func (r *AsyncConsumer) DisableLoop() {
 	r.disableLoop = true
+}
+
+func (r *AsyncConsumer) SetLimit(limit int) {
+	r.limit = limit
 }
 
 func (r *AsyncConsumer) SetErrorHandler(handler ConsumerErrorHandler) {
@@ -66,6 +71,7 @@ func (r *AsyncConsumer) SetLogLogger(logger func(log *LogQueueValue)) {
 func (r *AsyncConsumer) Digest(ctx context.Context, count int) {
 	consumer := r.engine.GetEventBroker().Consumer(r.name, asyncConsumerGroupName)
 	consumer.SetErrorHandler(r.errorHandler)
+	consumer.SetLimit(r.limit)
 	consumer.(*eventsConsumer).block = r.block
 	if r.disableLoop {
 		consumer.DisableLoop()
