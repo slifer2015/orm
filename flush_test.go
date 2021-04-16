@@ -458,8 +458,7 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	err = flusher.FlushWithCheck()
 	assert.EqualError(t, err, "Duplicate entry 'test_check' for key 'name'")
 	entity8 = &flushEntity{Name: "test_check_2", EnumNotNull: "a", ReferenceOne: &flushEntityReference{ID: 100}}
-	flusher.Track(entity8)
-	err = flusher.FlushWithCheck()
+	err = engine.FlushWithCheck(entity8)
 	assert.EqualError(t, err, "foreign key error in key `test:flushEntity:ReferenceOne`")
 
 	entity8 = &flushEntity{Name: "test_check_3", EnumNotNull: "Y"}

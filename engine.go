@@ -355,32 +355,8 @@ func (e *Engine) FlushLazyMany(entities ...Entity) {
 	e.NewFlusher().Track(entities...).FlushLazy()
 }
 
-func (e *Engine) FlushWithCheck(entity Entity) error {
-	return e.FlushWithCheckMany(entity)
-}
-
-func (e *Engine) FlushWithCheckMany(entities ...Entity) error {
-	var err error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				asErr := r.(error)
-				assErr1, is := asErr.(*ForeignKeyError)
-				if is {
-					err = assErr1
-					return
-				}
-				assErr2, is := asErr.(*DuplicatedKeyError)
-				if is {
-					err = assErr2
-					return
-				}
-				panic(asErr)
-			}
-		}()
-		e.NewFlusher().Track(entities...).Flush()
-	}()
-	return err
+func (e *Engine) FlushWithCheck(entity ...Entity) error {
+	return e.NewFlusher().Track(entity...).FlushWithCheck()
 }
 
 func (e *Engine) Delete(entity Entity) {
