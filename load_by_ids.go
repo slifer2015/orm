@@ -82,6 +82,10 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 					missing = true
 				}
 			} else if hasRedis {
+				if dbMap == nil {
+					dbMap = make(map[int]int)
+				}
+				dbMap[j] = i
 				cacheKeys[j] = cacheKeys[i]
 				if cacheMap == nil {
 					cacheMap = make(map[int]int)
@@ -94,6 +98,7 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 					dbMap = make(map[int]int)
 				}
 				dbMap[j] = i
+				cacheKeys[j] = cacheKeys[i]
 				ids[j] = ids[i]
 				j++
 			}
@@ -129,15 +134,19 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 					}
 				}
 			} else {
-				if dbMap == nil {
-					dbMap = make(map[int]int)
+				if !hasLocalCache {
+					if dbMap == nil {
+						dbMap = make(map[int]int)
+					}
+					dbMap[j] = i
 				}
-				dbMap[j] = i
+				cacheKeys[j] = cacheKeys[i]
 				ids[j] = ids[i]
 				j++
 			}
 		}
 		ids = ids[0:j]
+		cacheKeys = cacheKeys[0:j]
 	}
 	if len(ids) > 0 {
 		query := "SELECT " + schema.fieldsQuery + " FROM `" + schema.tableName + "` WHERE `ID` IN (" + strconv.FormatUint(ids[0], 10)
@@ -164,9 +173,7 @@ func tryByIDs(engine *Engine, ids []uint64, entities reflect.Value, references [
 			newSlice.Index(k).Set(e.getORM().value)
 			fillFromDBRow(id, engine, pointers, e, true, lazy)
 			if hasCache {
-				// TODO not working
-				//cacheKey := cacheKeys[k]
-				cacheKey := schema.getCacheKey(id)
+				cacheKey := cacheKeys[idsMap[id]]
 				if hasLocalCache {
 					localCacheToSet = append(localCacheToSet, cacheKey, buildLocalCacheValue(pointers))
 				}

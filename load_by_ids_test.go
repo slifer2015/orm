@@ -70,6 +70,9 @@ func testLoadByIds(t *testing.T, local, redis bool) {
 
 	var rows []*loadByIdsEntity
 
+	engine.LoadByIDs([]uint64{1, 2, 3, 4}, &rows)
+	engine.GetLocalCache().Remove("a25e2:3")
+	engine.GetRedis().Del("a25e2:3")
 	missing := engine.LoadByIDs([]uint64{1, 2, 3, 4}, &rows, "*")
 	assert.True(t, missing)
 	assert.Len(t, rows, 4)
