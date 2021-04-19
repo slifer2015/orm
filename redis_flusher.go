@@ -105,6 +105,10 @@ func (f *redisFlusher) HSet(redisPool, key string, values ...interface{}) {
 		return
 	}
 	commands.diffs[commandHSet] = true
+	if commands.hSets == nil {
+		commands.hSets = map[string][]interface{}{key: values}
+		return
+	}
 	commands.hSets[key] = values
 }
 
