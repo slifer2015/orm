@@ -5,7 +5,6 @@ import (
 
 	apexLog "github.com/apex/log"
 	"github.com/apex/log/handlers/memory"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -48,6 +47,16 @@ type loadByIDSubReference2 struct {
 	ID           uint
 	Name         string
 	ReferenceTwo *loadByIDSubReference
+}
+
+type loadByIDBenchmarkEntity struct {
+	ORM     `orm:"localCache"`
+	ID      uint
+	Name    string
+	Int     int
+	Bool    bool
+	Float   float64
+	Decimal float32 `orm:"decimal=10,2"`
 }
 
 func TestLoadById(t *testing.T) {
@@ -212,39 +221,35 @@ func TestLoadById(t *testing.T) {
 	})
 }
 
-// BenchmarkLoadByIDdLocalCache-12    	  913500	      1288 ns/op	     248 B/op	       5 allocs/op
+// BenchmarkLoadByIDdLocalCache-12    	 4088002	       294.7 ns/op	       8 B/op	       1 allocs/op
 func BenchmarkLoadByIDdLocalCache(b *testing.B) {
 	benchmarkLoadByIDLocalCache(b, false)
 }
 
-// BenchmarkLoadByIDLocalCacheLazy-12    	 5608262	       206.7 ns/op	       8 B/op	       1 allocs/op
+// BenchmarkLoadByIDLocalCacheLazy-12    	 5783040	       204.4 ns/op	       8 B/op	       1 allocs/op
 func BenchmarkLoadByIDLocalCacheLazy(b *testing.B) {
 	benchmarkLoadByIDLocalCache(b, true)
 }
 
 func benchmarkLoadByIDLocalCache(b *testing.B, lazy bool) {
-	entity := &schemaEntity{}
-	ref := &schemaEntityRef{}
+	entity := &loadByIDBenchmarkEntity{}
 	registry := &Registry{}
 	registry.RegisterEnumStruct("orm.TestEnum", TestEnum)
 	registry.RegisterLocalCache(10000)
-	engine := PrepareTables(nil, registry, 5, entity, ref)
-	e := &schemaEntity{}
-	e.Name = "Name"
-	e.Uint32 = 1
-	e.Int32 = 1
-	e.Int8 = 1
-	e.Enum = TestEnum.A
-	e.RefOne = &schemaEntityRef{}
-	engine.Flush(e)
-	_ = engine.LoadByID(1, e)
+	engine := PrepareTables(nil, registry, 5, entity)
+	entity.Name = "Name"
+	entity.Int = 1
+	entity.Float = 1.3
+	entity.Decimal = 12.23
+	engine.Flush(entity)
+	_ = engine.LoadByID(1, entity)
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		if lazy {
-			_ = engine.LoadByIDLazy(1, e)
+			_ = engine.LoadByIDLazy(1, entity)
 		} else {
-			_ = engine.LoadByID(1, e)
+			_ = engine.LoadByID(1, entity)
 		}
 	}
 }
